@@ -1,42 +1,24 @@
-set(TARGET_NAME main1)
-add_executable(${TARGET_NAME}
-    main.c
-    )
-target_include_directories(${TARGET_NAME} PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/..
-    )
-target_link_libraries(${TARGET_NAME} PRIVATE
-    pico_async_context_freertos
-    FreeRTOS-Kernel-Heap4
-    pico_stdlib
-    )
-if(PICO_CYW43_SUPPORTED)
-    # For led support on pico_w
-    target_link_libraries(${TARGET_NAME} PRIVATE
-        pico_cyw43_arch_none
-    )
-endif()
-target_compile_definitions(${TARGET_NAME} PRIVATE
-    configNUMBER_OF_CORES=1
-    )
-pico_add_extra_outputs(${TARGET_NAME})
+# 设置目标名称为 main
+set(TARGET_NAME main)
 
-set(TARGET_NAME main2)
+# 添加可执行文件，使用 main.c 作为源文件
 add_executable(${TARGET_NAME}
     main.c
+    Mp3.cpp
     )
+
+# 包含头文件目录（如果需要）
 target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/..
     )
+
+# 链接所需的库
 target_link_libraries(${TARGET_NAME} PRIVATE
-    pico_async_context_freertos
-    FreeRTOS-Kernel-Heap4
-    pico_stdlib
+    pico_stdlib           # Pico 标准库
+    hardware_uart         # UART 硬件库
+    FreeRTOS-Kernel
+    FreeRTOS-Kernel-Heap4 # 使用 Heap4 实现
     )
-if(PICO_CYW43_SUPPORTED)
-    # For led support on pico_w
-    target_link_libraries(${TARGET_NAME} PRIVATE
-        pico_cyw43_arch_none
-    )
-endif()
+    
+# 添加额外的输出（如 UF2 文件）
 pico_add_extra_outputs(${TARGET_NAME})

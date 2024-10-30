@@ -41,6 +41,11 @@
  *----------------------------------------------------------*/
 
 /* Scheduler Related */
+
+//开启Rp2040的SMP支持
+#define FREE_RTOS_KERNEL_SMP 1
+
+
 #define configUSE_PREEMPTION                    1
 #define configUSE_TICKLESS_IDLE                 0
 #define configUSE_IDLE_HOOK                     0
@@ -104,9 +109,9 @@
 
 #if FREE_RTOS_KERNEL_SMP // set by the RP2040 SMP port of FreeRTOS
 /* SMP port only */
-#ifndef configNUMBER_OF_CORES
+//开启双核模式
 #define configNUMBER_OF_CORES                   2
-#endif
+
 #define configNUM_CORES                         configNUMBER_OF_CORES
 #define configTICK_CORE                         0
 #define configRUN_MULTIPLE_PRIORITIES           1

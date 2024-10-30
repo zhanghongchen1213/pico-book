@@ -1,198 +1,264 @@
-/**
- * Copyright (c) 2022 Raspberry Pi (Trading) Ltd.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- */
-
 #include <stdio.h>
-
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
-
-#ifdef CYW43_WL_GPIO_LED_PIN
-#include "pico/cyw43_arch.h"
-#endif
-
 #include "FreeRTOS.h"
 #include "task.h"
-#include "pico/assert.h"
+#include "event_groups.h"
+#include "queue.h"
 
-// Which core to run on if configNUMBER_OF_CORES==1
-#ifndef RUN_FREE_RTOS_ON_CORE
-#define RUN_FREE_RTOS_ON_CORE 0
+// 定义任务优先级
+#define PRIORITY_HIGH (configMAX_PRIORITIES - 1)
+#define PRIORITY_MEDIUM (configMAX_PRIORITIES - 2)
+#define PRIORITY_LOW (configMAX_PRIORITIES - 3)
+
+// 定义任务栈大小
+#define STACK_SIZE 256
+
+// 定义事件组事件位
+#define EVENT_TOUCH_SWITCH (1 << 0)
+#define EVENT_HEARTBEAT (1 << 1)
+
+// 定义队列长度
+#define QUEUE_LENGTH 10
+
+// 定义 LED 闪烁间隔（毫秒）
+#define LED_DELAY_MS 500
+
+// 事件组句柄
+EventGroupHandle_t xEventGroup;
+
+// 数据队列句柄
+QueueHandle_t xHeartbeatQueue;
+
+// 任务句柄
+TaskHandle_t xTask_TouchSwitchMonitor_Handle;
+TaskHandle_t xTask_HeartbeatMonitor_Handle;
+TaskHandle_t xTask_WS2812BControl_Handle;
+TaskHandle_t xTask_VoiceBroadcastControl_Handle;
+TaskHandle_t xTask_OLEDDisplay_Handle;
+TaskHandle_t xTask_Blink_Handle;
+
+// 板载 LED 引脚
+#ifndef PICO_DEFAULT_LED_PIN
+#define PICO_DEFAULT_LED_PIN 25
 #endif
 
-// Whether to flash the led
-#ifndef USE_LED
-#define USE_LED 1
-#endif
-
-// Whether to busy wait in the led thread
-#ifndef LED_BUSY_WAIT
-#define LED_BUSY_WAIT 1
-#endif
-
-// Delay between led blinking
-#define LED_DELAY_MS 2000
-
-// Priorities of our threads - higher numbers are higher priority
-#define MAIN_TASK_PRIORITY (tskIDLE_PRIORITY + 2UL)
-#define BLINK_TASK_PRIORITY (tskIDLE_PRIORITY + 1UL)
-#define WORKER_TASK_PRIORITY (tskIDLE_PRIORITY + 4UL)
-
-// Stack sizes of our threads in words (4 bytes)
-#define MAIN_TASK_STACK_SIZE configMINIMAL_STACK_SIZE
-#define BLINK_TASK_STACK_SIZE configMINIMAL_STACK_SIZE
-#define WORKER_TASK_STACK_SIZE configMINIMAL_STACK_SIZE
-
-#include "pico/async_context_freertos.h"
-static async_context_freertos_t async_context_instance;
-
-// Create an async context
-static async_context_t *example_async_context(void)
+// 触摸开关监测任务
+void Task_TouchSwitchMonitor(void *pvParameters)
 {
-    async_context_freertos_config_t config = async_context_freertos_default_config();
-    config.task_priority = WORKER_TASK_PRIORITY;     // defaults to ASYNC_CONTEXT_DEFAULT_FREERTOS_TASK_PRIORITY
-    config.task_stack_size = WORKER_TASK_STACK_SIZE; // defaults to ASYNC_CONTEXT_DEFAULT_FREERTOS_TASK_STACK_SIZE
-    if (!async_context_freertos_init(&async_context_instance, &config))
-        return NULL;
-    return &async_context_instance.core;
+    while (1)
+    {
+        // 检测触摸开关状态
+        bool touchDetected = false; // 这里需要替换为实际的触摸检测逻辑
+
+        if (touchDetected)
+        {
+            // 控制5个IO口连接的LED灯
+            // 控制单IO口连接的LED灯带
+            // 上报MCU（如需要）
+
+            // 设置事件，通知其他任务
+            xEventGroupSetBits(xEventGroup, EVENT_TOUCH_SWITCH);
+        }
+
+        // 适当延时，避免任务占用过多CPU时间
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
 
-#if USE_LED
-// Turn led on or off
-static void pico_set_led(bool led_on)
+// 心跳检测任务
+void Task_HeartbeatMonitor(void *pvParameters)
 {
-#if defined PICO_DEFAULT_LED_PIN
-    gpio_put(PICO_DEFAULT_LED_PIN, led_on);
-#elif defined(CYW43_WL_GPIO_LED_PIN)
-    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_on);
-#endif
+    while (1)
+    {
+        // 检测心跳传感器
+        bool heartbeatDetected = false; // 这里需要替换为实际的心跳检测逻辑
+
+        if (heartbeatDetected)
+        {
+            // 获取心跳数据
+            int heartbeatData = 0; // 这里需要替换为实际的心跳数据
+
+            // 发送心跳数据到队列
+            xQueueSend(xHeartbeatQueue, &heartbeatData, 0);
+
+            // 设置事件，通知其他任务
+            xEventGroupSetBits(xEventGroup, EVENT_HEARTBEAT);
+        }
+
+        // 适当延时，避免任务占用过多CPU时间
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
 
-// Initialise led
-static void pico_init_led(void)
+// WS2812B 氛围灯控制任务
+void Task_WS2812BControl(void *pvParameters)
 {
-#if defined PICO_DEFAULT_LED_PIN
+    EventBits_t uxBits;
+
+    while (1)
+    {
+        // 等待事件组的事件
+        uxBits = xEventGroupWaitBits(
+            xEventGroup,
+            EVENT_TOUCH_SWITCH | EVENT_HEARTBEAT,
+            pdTRUE,       // 清除已设置的事件位
+            pdFALSE,      // 任意一个事件位被设置就返回
+            portMAX_DELAY // 一直等待
+        );
+
+        if (uxBits & EVENT_TOUCH_SWITCH)
+        {
+            // 处理触摸开关触发的氛围灯变化
+        }
+
+        if (uxBits & EVENT_HEARTBEAT)
+        {
+            // 处理心跳检测触发的氛围灯变化
+        }
+
+        // 适当延时，避免任务占用过多CPU时间
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+// 语音播报模块控制任务
+void Task_VoiceBroadcastControl(void *pvParameters)
+{
+    EventBits_t uxBits;
+
+    // 开机后播放默认音乐
+    // 播放默认音乐的逻辑
+
+    while (1)
+    {
+        // 等待事件组的事件
+        uxBits = xEventGroupWaitBits(
+            xEventGroup,
+            EVENT_TOUCH_SWITCH | EVENT_HEARTBEAT,
+            pdTRUE,       // 清除已设置的事件位
+            pdFALSE,      // 任意一个事件位被设置就返回
+            portMAX_DELAY // 一直等待
+        );
+
+        if (uxBits & EVENT_TOUCH_SWITCH)
+        {
+            // 播放触摸开关触发的音频
+        }
+
+        if (uxBits & EVENT_HEARTBEAT)
+        {
+            // 播放心跳检测触发的音频
+        }
+
+        // 适当延时，避免任务占用过多CPU时间
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+// OLED 显示任务
+void Task_OLEDDisplay(void *pvParameters)
+{
+    int heartbeatData;
+
+    // 开机后显示默认图像
+    // 显示默认图像的逻辑
+
+    while (1)
+    {
+        // 从队列中接收心跳数据
+        if (xQueueReceive(xHeartbeatQueue, &heartbeatData, portMAX_DELAY) == pdPASS)
+        {
+            // 更新OLED显示内容，显示心跳数据
+        }
+
+        // 适当延时，避免任务占用过多CPU时间
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+// LED 闪烁任务
+void Task_Blink(void *pvParameters)
+{
+    // 初始化板载 LED
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-#elif defined(CYW43_WL_GPIO_LED_PIN)
-    hard_assert(cyw43_arch_init() == PICO_OK);
-    pico_set_led(false); // make sure cyw43 is started
-#endif
-}
 
-void blink_task(__unused void *params)
-{
-    bool on = false;
-    printf("blink_task starts\n");
-    pico_init_led();
-    while (true)
+    bool led_state = false;
+
+    while (1)
     {
-#if configNUMBER_OF_CORES > 1
-        static int last_core_id = -1;
-        if (portGET_CORE_ID() != last_core_id)
-        {
-            last_core_id = portGET_CORE_ID();
-            printf("blink task is on core %d\n", last_core_id);
-        }
-#endif
-        pico_set_led(on);
-        on = !on;
+        // 切换 LED 状态
+        led_state = !led_state;
+        gpio_put(PICO_DEFAULT_LED_PIN, led_state);
 
-#if LED_BUSY_WAIT
-        // You shouldn't usually do this. We're just keeping the thread busy,
-        // experiment with BLINK_TASK_PRIORITY and LED_BUSY_WAIT to see what happens
-        // if BLINK_TASK_PRIORITY is higher than TEST_TASK_PRIORITY main_task won't get any free time to run
-        // unless configNUMBER_OF_CORES > 1
-        busy_wait_ms(LED_DELAY_MS);
-#else
-        sleep_ms(LED_DELAY_MS);
-#endif
+        // 延时
+        vTaskDelay(pdMS_TO_TICKS(LED_DELAY_MS));
     }
-}
-#endif // USE_LED
-
-// async workers run in their own thread when using async_context_freertos_t with priority WORKER_TASK_PRIORITY
-static void do_work(async_context_t *context, async_at_time_worker_t *worker)
-{
-    async_context_add_at_time_worker_in_ms(context, worker, 10000);
-    static uint32_t count = 0;
-    printf("Hello from worker count=%u\n", count++);
-#if configNUMBER_OF_CORES > 1
-    static int last_core_id = -1;
-    if (portGET_CORE_ID() != last_core_id)
-    {
-        last_core_id = portGET_CORE_ID();
-        printf("worker is on core %d\n", last_core_id);
-    }
-#endif
-}
-async_at_time_worker_t worker_timeout = {.do_work = do_work};
-
-void main_task(__unused void *params)
-{
-    async_context_t *context = example_async_context();
-    // start the worker running
-    async_context_add_at_time_worker_in_ms(context, &worker_timeout, 0);
-#if USE_LED
-    // start the led blinking
-    xTaskCreate(blink_task, "BlinkThread", BLINK_TASK_STACK_SIZE, NULL, BLINK_TASK_PRIORITY, NULL);
-#endif
-    int count = 0;
-    while (true)
-    {
-#if configNUMBER_OF_CORES > 1
-        static int last_core_id = -1;
-        if (portGET_CORE_ID() != last_core_id)
-        {
-            last_core_id = portGET_CORE_ID();
-            printf("main task is on core %d\n", last_core_id);
-        }
-#endif
-        printf("Hello from main task count=%u\n", count++);
-        vTaskDelay(3000);
-    }
-    async_context_deinit(context);
 }
 
 void vLaunch(void)
 {
-    TaskHandle_t task;
-    xTaskCreate(main_task, "MainThread", MAIN_TASK_STACK_SIZE, NULL, MAIN_TASK_PRIORITY, &task);
+    // 创建事件组
+    xEventGroup = xEventGroupCreate();
 
-#if configUSE_CORE_AFFINITY && configNUMBER_OF_CORES > 1
-    // we must bind the main task to one core (well at least while the init is called)
-    vTaskCoreAffinitySet(task, 1);
+    // 创建数据队列
+    xHeartbeatQueue = xQueueCreate(QUEUE_LENGTH, sizeof(int));
+
+    // 创建触摸开关监测任务
+    xTaskCreate(Task_TouchSwitchMonitor, "TouchSwitchMonitor", STACK_SIZE, NULL, PRIORITY_HIGH, &xTask_TouchSwitchMonitor_Handle);
+#if (configUSE_CORE_AFFINITY == 1)
+    vTaskCoreAffinitySet(xTask_TouchSwitchMonitor_Handle, (1 << 0)); // 绑定到核心0
 #endif
 
-    /* Start the tasks and timer running. */
+    // 创建心跳检测任务
+    xTaskCreate(Task_HeartbeatMonitor, "HeartbeatMonitor", STACK_SIZE, NULL, PRIORITY_HIGH, &xTask_HeartbeatMonitor_Handle);
+#if (configUSE_CORE_AFFINITY == 1)
+    vTaskCoreAffinitySet(xTask_HeartbeatMonitor_Handle, (1 << 0)); // 绑定到核心0
+#endif
+
+    // 创建 WS2812B 氛围灯控制任务
+    xTaskCreate(Task_WS2812BControl, "WS2812BControl", STACK_SIZE, NULL, PRIORITY_MEDIUM, &xTask_WS2812BControl_Handle);
+#if (configUSE_CORE_AFFINITY == 1)
+    vTaskCoreAffinitySet(xTask_WS2812BControl_Handle, (1 << 1)); // 绑定到核心1
+#endif
+
+    // 创建语音播报模块控制任务
+    xTaskCreate(Task_VoiceBroadcastControl, "VoiceBroadcastControl", STACK_SIZE, NULL, PRIORITY_MEDIUM, &xTask_VoiceBroadcastControl_Handle);
+#if (configUSE_CORE_AFFINITY == 1)
+    vTaskCoreAffinitySet(xTask_VoiceBroadcastControl_Handle, (1 << 1)); // 绑定到核心1
+#endif
+
+    // 创建 OLED 显示任务
+    xTaskCreate(Task_OLEDDisplay, "OLEDDisplay", STACK_SIZE, NULL, PRIORITY_MEDIUM, &xTask_OLEDDisplay_Handle);
+#if (configUSE_CORE_AFFINITY == 1)
+    vTaskCoreAffinitySet(xTask_OLEDDisplay_Handle, (1 << 1)); // 绑定到核心1
+#endif
+
+    // 创建 LED 闪烁任务
+    xTaskCreate(Task_Blink, "BlinkTask", STACK_SIZE, NULL, PRIORITY_LOW, &xTask_Blink_Handle);
+#if (configUSE_CORE_AFFINITY == 1)
+    // 将 LED 闪烁任务绑定到核心1，以免影响高优先级任务
+    vTaskCoreAffinitySet(xTask_Blink_Handle, (1 << 1));
+#endif
+
+    // 启动调度器
     vTaskStartScheduler();
 }
 
 int main(void)
 {
+    // 初始化标准库
     stdio_init_all();
 
-    /* Configure the hardware ready to run the demo. */
-    const char *rtos_name;
-#if (configNUMBER_OF_CORES > 1)
-    rtos_name = "FreeRTOS SMP";
-#else
-    rtos_name = "FreeRTOS";
-#endif
+    // 启动任务
+    vLaunch();
 
-#if (configNUMBER_OF_CORES > 1)
-    printf("Starting %s on both cores:\n", rtos_name);
-    vLaunch();
-#elif (RUN_FREE_RTOS_ON_CORE == 1 && configNUMBER_OF_CORES == 1)
-    printf("Starting %s on core 1:\n", rtos_name);
-    multicore_launch_core1(vLaunch);
-    while (true)
-        ;
-#else
-    printf("Starting %s on core 0:\n", rtos_name);
-    vLaunch();
-#endif
+    // 主循环不应该运行到这里
+    while (1)
+    {
+        tight_loop_contents();
+    }
+
     return 0;
 }
