@@ -34,15 +34,16 @@
 
 #define MP3_STATUS_CHECKS_IN_AGREEMENT 4
 
-#define MP3_DEBUG 0
+#define MP3_DEBUG 1
 
 class Mp3
 {
 private:
     unsigned int count = 0;
+    unsigned int currentFileNumber = 1;
 
     unsigned int sendCommandWithUnsignedIntResponse(uint8_t command);
-    int waitUntilAvailable(unsigned long maxWaitTime = 1000);
+    bool waitUntilAvailable(unsigned long timeout = 1000);
     void sendCommand(uint8_t command, uint8_t arg1, uint8_t arg2, char *responseBuffer, unsigned int bufferLength);
     void sendCommand(uint8_t command);
     void sendCommand(uint8_t command, uint8_t arg1);

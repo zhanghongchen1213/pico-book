@@ -1,6 +1,7 @@
 #include "Mp3.h"
 #include <cstring>
 
+Mp3 mp3;
 // UART 接口函数的封装
 static void mp3_uart_write(const uint8_t *data, size_t length)
 {
@@ -54,17 +55,18 @@ unsigned int Mp3::sendCommandWithUnsignedIntResponse(uint8_t command)
     }
 }
 
-int Mp3::waitUntilAvailable(unsigned long maxWaitTime)
+bool Mp3::waitUntilAvailable(unsigned long timeout)
 {
-    unsigned long startTime = to_ms_since_boot(get_absolute_time());
-    while (to_ms_since_boot(get_absolute_time()) - startTime < maxWaitTime)
+    absolute_time_t end_time = make_timeout_time_ms(timeout);
+    while (absolute_time_diff_us(end_time, get_absolute_time()) > 0)
     {
         if (uart_is_readable(MP3_UART_ID))
         {
-            return 1;
+            return true; // 数据可用，返回 true
         }
+        vTaskDelay(pdMS_TO_TICKS(1)); // 延时 1 毫秒，让出 CPU
     }
-    return 0;
+    return false; // 超时，返回 false
 }
 
 void Mp3::sendCommand(uint8_t command, uint8_t arg1, uint8_t arg2, char *responseBuffer, unsigned int bufferLength)
@@ -73,12 +75,6 @@ void Mp3::sendCommand(uint8_t command, uint8_t arg1, uint8_t arg2, char *respons
     if ((command == 0x41) || (command == 0x42))
     {
         args = 2;
-    }
-
-    // 清空 UART 接收缓冲区
-    while (uart_is_readable(MP3_UART_ID))
-    {
-        uart_getc(MP3_UART_ID);
     }
 
 #if MP3_DEBUG
@@ -102,63 +98,70 @@ void Mp3::sendCommand(uint8_t command, uint8_t arg1, uint8_t arg2, char *respons
     cmdBuffer[cmdLength++] = 0xEF;
 
     mp3_uart_write(cmdBuffer, cmdLength);
-    vTaskDelay(pdMS_TO_TICKS(10));
+    sleep_ms(200);
+    /*
+            if (responseBuffer && bufferLength)
+            {
+                memset(responseBuffer, 0, bufferLength);
+            }
 
-    if (responseBuffer && bufferLength)
-    {
-        memset(responseBuffer, 0, bufferLength);
-    }
+            waitUntilAvailable(1000);
 
-    waitUntilAvailable(1000);
+        #if MP3_DEBUG
+            printf("Received response: ");
+        #endif
 
-#if MP3_DEBUG
-    printf("Received response: ");
-#endif
+            unsigned int i = 0;
+            uint8_t byte = 0;
+            while (waitUntilAvailable(150))
+            {
+                byte = uart_getc(MP3_UART_ID);
 
-    unsigned int i = 0;
-    uint8_t byte = 0;
-    while (waitUntilAvailable(150))
-    {
-        byte = uart_getc(MP3_UART_ID);
+        #if MP3_DEBUG
+                printf("%02X ", byte);
+        #endif
 
-#if MP3_DEBUG
-        printf("%02X ", byte);
-#endif
+                if (responseBuffer && (i < bufferLength - 1))
+                {
+                    responseBuffer[i++] = byte;
+                }
+            }
 
-        if (responseBuffer && (i < bufferLength - 1))
-        {
-            responseBuffer[i++] = byte;
-        }
-    }
+        #if MP3_DEBUG
+            printf("\n");
+        #endif
 
-#if MP3_DEBUG
-    printf("\n");
-#endif
+        */
 }
 
 void Mp3::sendCommand(uint8_t command)
 {
-    this->sendCommand(command, 0, 0, nullptr, 0);
+    this->sendCommand(command, 0, 0, 0, 0);
 }
 
 void Mp3::sendCommand(uint8_t command, uint8_t arg1)
 {
-    this->sendCommand(command, arg1, 0, nullptr, 0);
+    this->sendCommand(command, arg1, 0, 0, 0);
 }
 
 void Mp3::sendCommand(uint8_t command, uint8_t arg1, uint8_t arg2)
 {
-    this->sendCommand(command, arg1, arg2, nullptr, 0);
+    this->sendCommand(command, arg1, arg2, 0, 0);
 }
 
 void Mp3::init()
 {
     // 初始化 UART
     uart_init(MP3_UART_ID, MP3_UART_BAUDRATE);
+    uart_set_format(MP3_UART_ID, 8, 1, UART_PARITY_NONE);
+    uart_set_fifo_enabled(MP3_UART_ID, false);
+
     gpio_set_function(MP3_UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(MP3_UART_RX_PIN, GPIO_FUNC_UART);
 
-    setVolume(15);
+    sleep_ms(2000);
+
+    setVolume(30);
     uint8_t volume = getVolume();
 #if MP3_DEBUG
     printf("Volume: %u\n", volume);
@@ -288,4 +291,20 @@ unsigned int Mp3::countFiles()
 unsigned int Mp3::currentFileIndexNumber()
 {
     return sendCommandWithUnsignedIntResponse(0x1A);
+}
+
+void Mp3::randomAll()
+{
+    const unsigned int minFileNumber = 1;
+    const unsigned int maxFileNumber = 80;
+
+    // 播放当前文件
+    playFileNumber(3, currentFileNumber);
+
+    // 更新文件编号，循环回到起始值
+    currentFileNumber++;
+    if (currentFileNumber > maxFileNumber)
+    {
+        currentFileNumber = minFileNumber;
+    }
 }

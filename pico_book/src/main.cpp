@@ -5,6 +5,7 @@
 #include "task.h"
 #include "event_groups.h"
 #include "queue.h"
+#include "Mp3.h"
 
 // 定义任务优先级
 #define PRIORITY_HIGH (configMAX_PRIORITIES - 1)
@@ -23,6 +24,8 @@
 
 // 定义 LED 闪烁间隔（毫秒）
 #define LED_DELAY_MS 500
+
+void uart_test();
 
 // 事件组句柄
 EventGroupHandle_t xEventGroup;
@@ -125,6 +128,14 @@ void Task_WS2812BControl(void *pvParameters)
 // 语音播报模块控制任务
 void Task_VoiceBroadcastControl(void *pvParameters)
 {
+    
+    while (1)
+    {
+        mp3.randomAll();
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+    
+/*
     EventBits_t uxBits;
 
     // 开机后播放默认音乐
@@ -154,6 +165,7 @@ void Task_VoiceBroadcastControl(void *pvParameters)
         // 适当延时，避免任务占用过多CPU时间
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+    */
 }
 
 // OLED 显示任务
@@ -192,6 +204,7 @@ void Task_Blink(void *pvParameters)
         led_state = !led_state;
         gpio_put(PICO_DEFAULT_LED_PIN, led_state);
 
+        printf("LED state: %d\n", led_state);
         // 延时
         vTaskDelay(pdMS_TO_TICKS(LED_DELAY_MS));
     }
@@ -251,6 +264,9 @@ int main(void)
     // 初始化标准库
     stdio_init_all();
 
+    mp3.init();
+
+    printf("\n");
     // 启动任务
     vLaunch();
 
@@ -261,4 +277,24 @@ int main(void)
     }
 
     return 0;
+}
+
+void uart_test()
+{
+    // 初始化 UART
+    uart_init(uart1, 9600);
+    uart_set_format(uart1, 8, 1, UART_PARITY_NONE);
+    uart_set_fifo_enabled(uart1, false);
+
+    gpio_set_function(MP3_UART_TX_PIN, GPIO_FUNC_UART);
+    gpio_set_function(MP3_UART_RX_PIN, GPIO_FUNC_UART);
+
+    printf("UART initialized.\n");
+    // 等待模块初始化
+    sleep_ms(2000);
+
+    // Example: Send raw data over UART (e.g., command to MP3 module)
+    const uint8_t test_data[] = {0x7E, 0x03, 0x31, 0x0F, 0xEF}; // Example command
+    uart_write_blocking(MP3_UART_ID, test_data, sizeof(test_data));
+    printf("Test data sent over UART.\n");
 }

@@ -3,7 +3,7 @@ set(TARGET_NAME main)
 
 # 添加可执行文件，使用 main.c 作为源文件
 add_executable(${TARGET_NAME}
-    main.c
+    main.cpp
     Mp3.cpp
     )
 
