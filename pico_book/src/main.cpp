@@ -6,6 +6,7 @@
 #include "event_groups.h"
 #include "queue.h"
 #include "Mp3.h"
+#include "max30102.h"
 
 // 定义任务优先级
 #define PRIORITY_HIGH (configMAX_PRIORITIES - 1)
@@ -128,44 +129,44 @@ void Task_WS2812BControl(void *pvParameters)
 // 语音播报模块控制任务
 void Task_VoiceBroadcastControl(void *pvParameters)
 {
-    
+
     while (1)
     {
         mp3.randomAll();
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
-    
-/*
-    EventBits_t uxBits;
 
-    // 开机后播放默认音乐
-    // 播放默认音乐的逻辑
+    /*
+        EventBits_t uxBits;
 
-    while (1)
-    {
-        // 等待事件组的事件
-        uxBits = xEventGroupWaitBits(
-            xEventGroup,
-            EVENT_TOUCH_SWITCH | EVENT_HEARTBEAT,
-            pdTRUE,       // 清除已设置的事件位
-            pdFALSE,      // 任意一个事件位被设置就返回
-            portMAX_DELAY // 一直等待
-        );
+        // 开机后播放默认音乐
+        // 播放默认音乐的逻辑
 
-        if (uxBits & EVENT_TOUCH_SWITCH)
+        while (1)
         {
-            // 播放触摸开关触发的音频
-        }
+            // 等待事件组的事件
+            uxBits = xEventGroupWaitBits(
+                xEventGroup,
+                EVENT_TOUCH_SWITCH | EVENT_HEARTBEAT,
+                pdTRUE,       // 清除已设置的事件位
+                pdFALSE,      // 任意一个事件位被设置就返回
+                portMAX_DELAY // 一直等待
+            );
 
-        if (uxBits & EVENT_HEARTBEAT)
-        {
-            // 播放心跳检测触发的音频
-        }
+            if (uxBits & EVENT_TOUCH_SWITCH)
+            {
+                // 播放触摸开关触发的音频
+            }
 
-        // 适当延时，避免任务占用过多CPU时间
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    */
+            if (uxBits & EVENT_HEARTBEAT)
+            {
+                // 播放心跳检测触发的音频
+            }
+
+            // 适当延时，避免任务占用过多CPU时间
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+        */
 }
 
 // OLED 显示任务
@@ -266,7 +267,17 @@ int main(void)
 
     mp3.init();
 
-    printf("\n");
+    // 初始化传感器
+    if (!heart.begin(i2c0, 4, 5, 400000, 0x57))
+    {
+        printf("MAX30102 not found\n");
+        while (1)
+        {
+            sleep_ms(1000);
+        }
+    }
+    printf("MAX30102 found\n");
+
     // 启动任务
     vLaunch();
 
@@ -277,24 +288,4 @@ int main(void)
     }
 
     return 0;
-}
-
-void uart_test()
-{
-    // 初始化 UART
-    uart_init(uart1, 9600);
-    uart_set_format(uart1, 8, 1, UART_PARITY_NONE);
-    uart_set_fifo_enabled(uart1, false);
-
-    gpio_set_function(MP3_UART_TX_PIN, GPIO_FUNC_UART);
-    gpio_set_function(MP3_UART_RX_PIN, GPIO_FUNC_UART);
-
-    printf("UART initialized.\n");
-    // 等待模块初始化
-    sleep_ms(2000);
-
-    // Example: Send raw data over UART (e.g., command to MP3 module)
-    const uint8_t test_data[] = {0x7E, 0x03, 0x31, 0x0F, 0xEF}; // Example command
-    uart_write_blocking(MP3_UART_ID, test_data, sizeof(test_data));
-    printf("Test data sent over UART.\n");
 }

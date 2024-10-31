@@ -5,6 +5,7 @@ set(TARGET_NAME main)
 add_executable(${TARGET_NAME}
     main.cpp
     Mp3.cpp
+    max30102.cpp
     )
 
 # 包含头文件目录（如果需要）
@@ -18,6 +19,7 @@ target_link_libraries(${TARGET_NAME} PRIVATE
     hardware_uart         # UART 硬件库
     FreeRTOS-Kernel
     FreeRTOS-Kernel-Heap4 # 使用 Heap4 实现
+    hardware_i2c          # I2C 硬件库
     )
     
 # 添加额外的输出（如 UF2 文件）
