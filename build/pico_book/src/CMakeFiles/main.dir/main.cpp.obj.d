@@ -68,25 +68,31 @@ pico_book/src/CMakeFiles/main.dir/main.cpp.obj: \
  /usr/local/picosdk/src/rp2040/hardware_structs/include/hardware/structs/resets.h \
  /usr/local/picosdk/src/rp2040/hardware_regs/include/hardware/regs/resets.h \
  /usr/local/picosdk/src/rp2_common/pico_stdio_uart/include/pico/stdio_uart.h \
- /usr/local/picosdk/src/rp2_common/pico_multicore/include/pico/multicore.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/sync.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/sem.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/lock_core.h \
- /usr/local/picosdk/src/rp2_common/hardware_sync/include/hardware/sync.h \
- /usr/local/picosdk/src/rp2_common/hardware_sync_spin_lock/include/hardware/sync/spin_lock.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/mutex.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/critical_section.h \
+ /home/pico-book/pico_book/src/Mp3.h \
  /usr/local/freertos/include/FreeRTOS.h \
  /usr/local/freertos/include/projdefs.h \
  /usr/local/freertos/include/portable.h \
  /usr/local/freertos/include/deprecated_definitions.h \
  /usr/local/freertos/portable/ThirdParty/GCC/RP2040/include/portmacro.h \
+ /usr/local/picosdk/src/rp2_common/hardware_sync/include/hardware/sync.h \
+ /usr/local/picosdk/src/rp2_common/hardware_sync_spin_lock/include/hardware/sync/spin_lock.h \
  /usr/local/freertos/include/mpu_wrappers.h \
  /usr/local/freertos/include/task.h /usr/local/freertos/include/list.h \
- /usr/local/freertos/include/event_groups.h \
- /usr/local/freertos/include/timers.h /usr/local/freertos/include/task.h \
- /usr/local/freertos/include/queue.h /home/pico-book/pico_book/src/Mp3.h \
+ /home/pico-book/pico_book/src/debug.h \
  /home/pico-book/pico_book/src/max30102.h \
+ /usr/include/newlib/c++/13.2.1/cstdio \
  /usr/local/picosdk/src/rp2_common/hardware_i2c/include/hardware/i2c.h \
  /usr/local/picosdk/src/rp2040/hardware_structs/include/hardware/structs/i2c.h \
- /usr/local/picosdk/src/rp2040/hardware_regs/include/hardware/regs/i2c.h
+ /usr/local/picosdk/src/rp2040/hardware_regs/include/hardware/regs/i2c.h \
+ /home/pico-book/pico_book/src/heartRate.h \
+ /usr/include/newlib/c++/13.2.1/cstdint \
+ /home/pico-book/pico_book/src/data_global.h \
+ /usr/local/picosdk/src/rp2_common/pico_multicore/include/pico/multicore.h \
+ /usr/local/picosdk/src/common/pico_sync/include/pico/sync.h \
+ /usr/local/picosdk/src/common/pico_sync/include/pico/sem.h \
+ /usr/local/picosdk/src/common/pico_sync/include/pico/lock_core.h \
+ /usr/local/picosdk/src/common/pico_sync/include/pico/mutex.h \
+ /usr/local/picosdk/src/common/pico_sync/include/pico/critical_section.h \
+ /usr/local/freertos/include/event_groups.h \
+ /usr/local/freertos/include/timers.h /usr/local/freertos/include/task.h \
+ /usr/local/freertos/include/queue.h

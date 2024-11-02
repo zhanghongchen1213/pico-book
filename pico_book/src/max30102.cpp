@@ -1,330 +1,535 @@
-// MAX30105.cpp
-
 #include "max30102.h"
-#include <string.h> // 用于 memcpy
 
-// Status Registers
-static const uint8_t MAX30105_INTSTAT1 = 0x00;
-static const uint8_t MAX30105_INTSTAT2 = 0x01;
-static const uint8_t MAX30105_INTENABLE1 = 0x02;
-static const uint8_t MAX30105_INTENABLE2 = 0x03;
+// 数据存储结构体
+struct Record
+{
+    uint32_t red[STORAGE_SIZE];
+    uint32_t IR[STORAGE_SIZE];
+    uint32_t green[STORAGE_SIZE];
+    uint8_t head;
+    uint8_t tail;
+} sense;
 
-// FIFO Registers
-static const uint8_t MAX30105_FIFOWRITEPTR = 0x04;
-static const uint8_t MAX30105_FIFOOVERFLOW = 0x05;
-static const uint8_t MAX30105_FIFOREADPTR = 0x06;
-static const uint8_t MAX30105_FIFODATA = 0x07;
+MAX30105 particleSensor;
 
-// Configuration Registers
-static const uint8_t MAX30105_FIFOCONFIG = 0x08;
-static const uint8_t MAX30105_MODECONFIG = 0x09;
-static const uint8_t MAX30105_PARTICLECONFIG = 0x0A; // Note, sometimes listed as "SPO2" config in datasheet (pg. 11)
-static const uint8_t MAX30105_LED1_PULSEAMP = 0x0C;
-static const uint8_t MAX30105_LED2_PULSEAMP = 0x0D;
-static const uint8_t MAX30105_LED3_PULSEAMP = 0x0E;
-static const uint8_t MAX30105_LED_PROX_AMP = 0x10;
-static const uint8_t MAX30105_MULTILEDCONFIG1 = 0x11;
-static const uint8_t MAX30105_MULTILEDCONFIG2 = 0x12;
-
-// Die Temperature Registers
-static const uint8_t MAX30105_DIETEMPINT = 0x1F;
-static const uint8_t MAX30105_DIETEMPFRAC = 0x20;
-static const uint8_t MAX30105_DIETEMPCONFIG = 0x21;
-
-// Proximity Function Registers
-static const uint8_t MAX30105_PROXINTTHRESH = 0x30;
-
-// Part ID Registers
-static const uint8_t MAX30105_REVISIONID = 0xFE;
-static const uint8_t MAX30105_PARTID = 0xFF; // Should always be 0x15. Identical to MAX30102.
-
-// MAX30105 Commands
-// Interrupt configuration (pg 13, 14)
-static const uint8_t MAX30105_INT_A_FULL_MASK = (unsigned int)~0b10000000;
-static const uint8_t MAX30105_INT_A_FULL_ENABLE = 0x80;
-static const uint8_t MAX30105_INT_A_FULL_DISABLE = 0x00;
-
-static const uint8_t MAX30105_INT_DATA_RDY_MASK = (unsigned int)~0b01000000;
-static const uint8_t MAX30105_INT_DATA_RDY_ENABLE = 0x40;
-static const uint8_t MAX30105_INT_DATA_RDY_DISABLE = 0x00;
-
-static const uint8_t MAX30105_INT_ALC_OVF_MASK = (unsigned int)~0b00100000;
-static const uint8_t MAX30105_INT_ALC_OVF_ENABLE = 0x20;
-static const uint8_t MAX30105_INT_ALC_OVF_DISABLE = 0x00;
-
-static const uint8_t MAX30105_INT_PROX_INT_MASK = (unsigned int)~0b00010000;
-static const uint8_t MAX30105_INT_PROX_INT_ENABLE = 0x10;
-static const uint8_t MAX30105_INT_PROX_INT_DISABLE = 0x00;
-
-static const uint8_t MAX30105_INT_DIE_TEMP_RDY_MASK = (unsigned int)~0b00000010;
-static const uint8_t MAX30105_INT_DIE_TEMP_RDY_ENABLE = 0x02;
-static const uint8_t MAX30105_INT_DIE_TEMP_RDY_DISABLE = 0x00;
-
-static const uint8_t MAX30105_SAMPLEAVG_MASK = (unsigned int)~0b11100000;
-static const uint8_t MAX30105_SAMPLEAVG_1 = 0x00;
-static const uint8_t MAX30105_SAMPLEAVG_2 = 0x20;
-static const uint8_t MAX30105_SAMPLEAVG_4 = 0x40;
-static const uint8_t MAX30105_SAMPLEAVG_8 = 0x60;
-static const uint8_t MAX30105_SAMPLEAVG_16 = 0x80;
-static const uint8_t MAX30105_SAMPLEAVG_32 = 0xA0;
-
-static const uint8_t MAX30105_ROLLOVER_MASK = 0xEF;
-static const uint8_t MAX30105_ROLLOVER_ENABLE = 0x10;
-static const uint8_t MAX30105_ROLLOVER_DISABLE = 0x00;
-
-static const uint8_t MAX30105_A_FULL_MASK = 0xF0;
-
-// Mode configuration commands (page 19)
-static const uint8_t MAX30105_SHUTDOWN_MASK = 0x7F;
-static const uint8_t MAX30105_SHUTDOWN = 0x80;
-static const uint8_t MAX30105_WAKEUP = 0x00;
-
-static const uint8_t MAX30105_RESET_MASK = 0xBF;
-static const uint8_t MAX30105_RESET = 0x40;
-
-static const uint8_t MAX30105_MODE_MASK = 0xF8;
-static const uint8_t MAX30105_MODE_REDONLY = 0x02;
-static const uint8_t MAX30105_MODE_REDIRONLY = 0x03;
-static const uint8_t MAX30105_MODE_MULTILED = 0x07;
-
-// Particle sensing configuration commands (pgs 19-20)
-static const uint8_t MAX30105_ADCRANGE_MASK = 0x9F;
-static const uint8_t MAX30105_ADCRANGE_2048 = 0x00;
-static const uint8_t MAX30105_ADCRANGE_4096 = 0x20;
-static const uint8_t MAX30105_ADCRANGE_8192 = 0x40;
-static const uint8_t MAX30105_ADCRANGE_16384 = 0x60;
-
-static const uint8_t MAX30105_SAMPLERATE_MASK = 0xE3;
-static const uint8_t MAX30105_SAMPLERATE_50 = 0x00;
-static const uint8_t MAX30105_SAMPLERATE_100 = 0x04;
-static const uint8_t MAX30105_SAMPLERATE_200 = 0x08;
-static const uint8_t MAX30105_SAMPLERATE_400 = 0x0C;
-static const uint8_t MAX30105_SAMPLERATE_800 = 0x10;
-static const uint8_t MAX30105_SAMPLERATE_1000 = 0x14;
-static const uint8_t MAX30105_SAMPLERATE_1600 = 0x18;
-static const uint8_t MAX30105_SAMPLERATE_3200 = 0x1C;
-
-static const uint8_t MAX30105_PULSEWIDTH_MASK = 0xFC;
-static const uint8_t MAX30105_PULSEWIDTH_69 = 0x00;
-static const uint8_t MAX30105_PULSEWIDTH_118 = 0x01;
-static const uint8_t MAX30105_PULSEWIDTH_215 = 0x02;
-static const uint8_t MAX30105_PULSEWIDTH_411 = 0x03;
-
-// Multi-LED Mode configuration (pg 22)
-static const uint8_t MAX30105_SLOT1_MASK = 0xF8;
-static const uint8_t MAX30105_SLOT2_MASK = 0x8F;
-static const uint8_t MAX30105_SLOT3_MASK = 0xF8;
-static const uint8_t MAX30105_SLOT4_MASK = 0x8F;
-
-static const uint8_t SLOT_NONE = 0x00;
-static const uint8_t SLOT_RED_LED = 0x01;
-static const uint8_t SLOT_IR_LED = 0x02;
-static const uint8_t SLOT_GREEN_LED = 0x03;
-static const uint8_t SLOT_NONE_PILOT = 0x04;
-static const uint8_t SLOT_RED_PILOT = 0x05;
-static const uint8_t SLOT_IR_PILOT = 0x06;
-static const uint8_t SLOT_GREEN_PILOT = 0x07;
-
-static const uint8_t MAX_30105_EXPECTEDPARTID = 0x15;
-
-MAX30105 heart;
-// 构造函数
 MAX30105::MAX30105()
 {
-    // 初始化成员变量
-    _i2c = i2c0;
-    _i2caddr = MAX30105_ADDRESS;
-    _sda_pin = 4;
-    _scl_pin = 5;
-    activeLEDs = 0;
-    memset(&sense, 0, sizeof(sense));
+    // Constructor
 }
 
-// 初始化函数
-bool MAX30105::begin(i2c_inst_t *i2c, uint8_t sda_pin, uint8_t scl_pin, uint32_t i2c_speed, uint8_t i2caddr)
+bool MAX30105::begin(i2c_inst_t *i2c, uint8_t sda_pin, uint8_t scl_pin, uint32_t i2cSpeed, uint8_t i2caddr)
 {
-    _i2c = i2c;
+    // 设置 I2C 端口和地址
+    _i2cPort = i2c;
+    _i2caddr = i2caddr;
     _sda_pin = sda_pin;
     _scl_pin = scl_pin;
-    _i2caddr = i2caddr;
 
-    // 初始化 I2C 接口和引脚
-    i2c_init(_i2c, i2c_speed);
+    // 初始化 I2C 端口并设置波特率
+    i2c_init(_i2cPort, i2cSpeed);
     gpio_set_function(_sda_pin, GPIO_FUNC_I2C);
     gpio_set_function(_scl_pin, GPIO_FUNC_I2C);
     gpio_pull_up(_sda_pin);
     gpio_pull_up(_scl_pin);
 
-    // 检查传感器是否连接
-    uint8_t partID = readRegister8(MAX30105_PARTID); // 读取 Part ID 寄存器
-    if (partID != MAX_30105_EXPECTEDPARTID)
-    { // MAX30105 的 Part ID 应为 0x15
+    // 检查是否连接了 MAX30105
+    if (readPartID() != MAX_30105_EXPECTEDPARTID)
+    {
+        // 错误：读取的 Part ID 与预期的不符，可能是连接问题
         return false;
     }
-    printf("Part ID: 0x%02X\n", partID);
 
-    readRegister8(MAX30105_REVISIONID); // 读取 Revision ID 寄存器
-
-    printf("Revision ID: 0x%02X\n", revisionID);
+    // 获取修订版本 ID
+    readRevisionID();
 
     return true;
 }
 
-// 读取 8 位寄存器
-uint8_t MAX30105::readRegister8(uint8_t reg)
-{
-    uint8_t data;
-    int ret;
+//
+// 配置
+//
 
-    // 发送寄存器地址
-    ret = i2c_write_blocking(_i2c, _i2caddr, &reg, 1, true); // true 表示保持总线（重复开始条件）
-    if (ret != 1)
+// 开始中断配置
+uint8_t MAX30105::getINT1(void)
+{
+    return (readRegister8(_i2caddr, MAX30105_INTSTAT1));
+}
+uint8_t MAX30105::getINT2(void)
+{
+    return (readRegister8(_i2caddr, MAX30105_INTSTAT2));
+}
+
+void MAX30105::enableAFULL(void)
+{
+    bitMask(MAX30105_INTENABLE1, MAX30105_INT_A_FULL_MASK, MAX30105_INT_A_FULL_ENABLE);
+}
+void MAX30105::disableAFULL(void)
+{
+    bitMask(MAX30105_INTENABLE1, MAX30105_INT_A_FULL_MASK, MAX30105_INT_A_FULL_DISABLE);
+}
+
+void MAX30105::enableDATARDY(void)
+{
+    bitMask(MAX30105_INTENABLE1, MAX30105_INT_DATA_RDY_MASK, MAX30105_INT_DATA_RDY_ENABLE);
+}
+void MAX30105::disableDATARDY(void)
+{
+    bitMask(MAX30105_INTENABLE1, MAX30105_INT_DATA_RDY_MASK, MAX30105_INT_DATA_RDY_DISABLE);
+}
+
+void MAX30105::enableALCOVF(void)
+{
+    bitMask(MAX30105_INTENABLE1, MAX30105_INT_ALC_OVF_MASK, MAX30105_INT_ALC_OVF_ENABLE);
+}
+void MAX30105::disableALCOVF(void)
+{
+    bitMask(MAX30105_INTENABLE1, MAX30105_INT_ALC_OVF_MASK, MAX30105_INT_ALC_OVF_DISABLE);
+}
+
+void MAX30105::enablePROXINT(void)
+{
+    bitMask(MAX30105_INTENABLE1, MAX30105_INT_PROX_INT_MASK, MAX30105_INT_PROX_INT_ENABLE);
+}
+void MAX30105::disablePROXINT(void)
+{
+    bitMask(MAX30105_INTENABLE1, MAX30105_INT_PROX_INT_MASK, MAX30105_INT_PROX_INT_DISABLE);
+}
+
+void MAX30105::enableDIETEMPRDY(void)
+{
+    bitMask(MAX30105_INTENABLE2, MAX30105_INT_DIE_TEMP_RDY_MASK, MAX30105_INT_DIE_TEMP_RDY_ENABLE);
+}
+void MAX30105::disableDIETEMPRDY(void)
+{
+    bitMask(MAX30105_INTENABLE2, MAX30105_INT_DIE_TEMP_RDY_MASK, MAX30105_INT_DIE_TEMP_RDY_DISABLE);
+}
+
+// 结束中断配置
+
+void MAX30105::softReset(void)
+{
+    bitMask(MAX30105_MODECONFIG, MAX30105_RESET_MASK, MAX30105_RESET);
+    absolute_time_t startTime = get_absolute_time();
+    while (absolute_time_diff_us(startTime, get_absolute_time()) < 100000) // 超时100ms
     {
-        return 0; // 失败
+        uint8_t response = readRegister8(_i2caddr, MAX30105_MODECONFIG);
+        if ((response & MAX30105_RESET) == 0)
+            break;   // 复位完成
+        sleep_ms(1); // 延时1ms，避免过度占用I2C总线
     }
-
-    // 读取数据
-    ret = i2c_read_blocking(_i2c, _i2caddr, &data, 1, false); // false 表示停止总线
-    if (ret != 1)
-    {
-        return 0; // 失败
-    }
-
-    return data;
 }
 
-// 写入 8 位寄存器
-void MAX30105::writeRegister8(uint8_t reg, uint8_t value)
+void MAX30105::shutDown(void)
 {
-    uint8_t buffer[2];
-    buffer[0] = reg;
-    buffer[1] = value;
-
-    i2c_write_blocking(_i2c, _i2caddr, buffer, 2, false);
+    // 将IC置于低功耗模式（数据手册第19页）
+    // 在关机期间，IC将继续响应I2C命令，但不会更新或进行新的读数（如温度）
+    bitMask(MAX30105_MODECONFIG, MAX30105_SHUTDOWN_MASK, MAX30105_SHUTDOWN);
 }
 
-// 位掩码操作
-void MAX30105::bitMask(uint8_t reg, uint8_t mask, uint8_t value)
+void MAX30105::wakeUp(void)
 {
-    uint8_t original = readRegister8(reg);
-    original = (original & mask) | value;
-    writeRegister8(reg, original);
+    // 将IC从低功耗模式中拉出（数据手册第19页）
+    bitMask(MAX30105_MODECONFIG, MAX30105_SHUTDOWN_MASK, MAX30105_WAKEUP);
 }
 
-// 设置 LED 模式
 void MAX30105::setLEDMode(uint8_t mode)
 {
-    // 设置 LED 模式寄存器，假设寄存器地址为 0x09
-    writeRegister8(0x09, mode);
-    activeLEDs = mode;
+    // 设置用于采样的LED -- 仅红色，红色+红外，或自定义。
+    // 参见数据手册第19页
+    bitMask(MAX30105_MODECONFIG, MAX30105_MODE_MASK, mode);
 }
 
-// 设置 ADC 范围
 void MAX30105::setADCRange(uint8_t adcRange)
 {
-    // 设置 ADC 范围寄存器，假设寄存器地址为 0x0A
-    bitMask(0x0A, 0x9F, adcRange);
+    // adcRange: 其中之一 MAX30105_ADCRANGE_2048, _4096, _8192, _16384
+    bitMask(MAX30105_PARTICLECONFIG, MAX30105_ADCRANGE_MASK, adcRange);
 }
 
-// 设置采样率
 void MAX30105::setSampleRate(uint8_t sampleRate)
 {
-    // 设置采样率寄存器，假设寄存器地址为 0x0A
-    bitMask(0x0A, 0xE3, sampleRate);
+    // sampleRate: 其中之一 MAX30105_SAMPLERATE_50, _100, _200, _400, _800, _1000, _1600, _3200
+    bitMask(MAX30105_PARTICLECONFIG, MAX30105_SAMPLERATE_MASK, sampleRate);
 }
 
-// 设置脉冲宽度
 void MAX30105::setPulseWidth(uint8_t pulseWidth)
 {
-    // 设置脉冲宽度寄存器，假设寄存器地址为 0x0A
-    bitMask(0x0A, 0xFC, pulseWidth);
+    // pulseWidth: 其中之一 MAX30105_PULSEWIDTH_69, _188, _215, _411
+    bitMask(MAX30105_PARTICLECONFIG, MAX30105_PULSEWIDTH_MASK, pulseWidth);
 }
 
-// 设置红光 LED 电流
-void MAX30105::setPulseAmplitudeRed(uint8_t value)
+// 注意: 幅度值: 0x00 = 0mA, 0x7F = 25.4mA, 0xFF = 50mA (典型值)
+// 参见数据手册第21页
+void MAX30105::setPulseAmplitudeRed(uint8_t amplitude)
 {
-    // 假设寄存器地址为 0x0C
-    writeRegister8(0x0C, value);
+    writeRegister8(_i2caddr, MAX30105_LED1_PULSEAMP, amplitude);
 }
 
-// 设置红外光 LED 电流
-void MAX30105::setPulseAmplitudeIR(uint8_t value)
+void MAX30105::setPulseAmplitudeIR(uint8_t amplitude)
 {
-    // 假设寄存器地址为 0x0D
-    writeRegister8(0x0D, value);
+    writeRegister8(_i2caddr, MAX30105_LED2_PULSEAMP, amplitude);
 }
 
-// 设置绿光 LED 电流
-void MAX30105::setPulseAmplitudeGreen(uint8_t value)
+void MAX30105::setPulseAmplitudeGreen(uint8_t amplitude)
 {
-    // 假设寄存器地址为 0x0E
-    writeRegister8(0x0E, value);
+    writeRegister8(_i2caddr, MAX30105_LED3_PULSEAMP, amplitude);
 }
 
-// 其他函数实现...
-// 例如 softReset(), shutDown(), wakeUp(), getRed(), getIR(), getGreen(), safeCheck(), check(), 等。
+void MAX30105::setPulseAmplitudeProximity(uint8_t amplitude)
+{
+    writeRegister8(_i2caddr, MAX30105_LED_PROX_AMP, amplitude);
+}
 
-// 由于篇幅限制，我将在下面提供关键的函数实现。
+void MAX30105::setProximityThreshold(uint8_t threshMSB)
+{
+    // 设置将触发粒子感应模式开始的IR ADC计数。
+    // threshMSB仅表示ADC计数的8个最高有效位。
+    // 参见数据手册第24页。
+    writeRegister8(_i2caddr, MAX30105_PROXINTTHRESH, threshMSB);
+}
+// 根据槽号分配设备
+// 设备可以是 SLOT_RED_LED 或 SLOT_RED_PILOT（接近传感器）
+// 分配 SLOT_RED_LED 将脉冲 LED
+// 分配 SLOT_RED_PILOT 将 ??
+void MAX30105::enableSlot(uint8_t slotNumber, uint8_t device)
+{
+    switch (slotNumber)
+    {
+    case (1):
+        bitMask(MAX30105_MULTILEDCONFIG1, MAX30105_SLOT1_MASK, device);
+        break;
+    case (2):
+        bitMask(MAX30105_MULTILEDCONFIG1, MAX30105_SLOT2_MASK, device << 4);
+        break;
+    case (3):
+        bitMask(MAX30105_MULTILEDCONFIG2, MAX30105_SLOT3_MASK, device);
+        break;
+    case (4):
+        bitMask(MAX30105_MULTILEDCONFIG2, MAX30105_SLOT4_MASK, device << 4);
+        break;
+    default:
+        // 不应该到这里！
+        break;
+    }
+}
 
-// 获取红光值
+// 清除所有槽分配
+void MAX30105::disableSlots(void)
+{
+    writeRegister8(_i2caddr, MAX30105_MULTILEDCONFIG1, 0);
+    writeRegister8(_i2caddr, MAX30105_MULTILEDCONFIG2, 0);
+}
+
+//
+// FIFO 配置
+//
+
+// 设置采样平均值（表3，第18页）
+void MAX30105::setFIFOAverage(uint8_t numberOfSamples)
+{
+    bitMask(MAX30105_FIFOCONFIG, MAX30105_SAMPLEAVG_MASK, numberOfSamples);
+}
+
+// 重置所有点以在已知状态下开始
+// 第15页建议在开始读取之前清除FIFO
+void MAX30105::clearFIFO(void)
+{
+    writeRegister8(_i2caddr, MAX30105_FIFOWRITEPTR, 0);
+    writeRegister8(_i2caddr, MAX30105_FIFOOVERFLOW, 0);
+    writeRegister8(_i2caddr, MAX30105_FIFOREADPTR, 0);
+}
+
+// 如果FIFO溢出，启用滚动
+void MAX30105::enableFIFORollover(void)
+{
+    bitMask(MAX30105_FIFOCONFIG, MAX30105_ROLLOVER_MASK, MAX30105_ROLLOVER_ENABLE);
+}
+
+// 如果FIFO溢出，禁用滚动
+void MAX30105::disableFIFORollover(void)
+{
+    bitMask(MAX30105_FIFOCONFIG, MAX30105_ROLLOVER_MASK, MAX30105_ROLLOVER_DISABLE);
+}
+
+// 设置触发几乎满中断的样本数（第18页）
+// 上电默认值为32个样本
+// 注意这是反向的：0x00是32个样本，0x0F是17个样本
+void MAX30105::setFIFOAlmostFull(uint8_t numberOfSamples)
+{
+    bitMask(MAX30105_FIFOCONFIG, MAX30105_A_FULL_MASK, numberOfSamples);
+}
+
+// 读取FIFO写指针
+uint8_t MAX30105::getWritePointer(void)
+{
+    return (readRegister8(_i2caddr, MAX30105_FIFOWRITEPTR));
+}
+
+// 读取FIFO读指针
+uint8_t MAX30105::getReadPointer(void)
+{
+    return (readRegister8(_i2caddr, MAX30105_FIFOREADPTR));
+}
+
+// 芯片温度
+// 返回温度（摄氏度）
+float MAX30105::readTemperature()
+{
+    // 第一步：配置芯片温度寄存器以获取1个温度样本
+    writeRegister8(_i2caddr, MAX30105_DIETEMPCONFIG, 0x01);
+
+    // 轮询位以清除，读取完成
+    // 超时100ms
+    // 设置超时时间
+    absolute_time_t startTime = get_absolute_time();
+    while (absolute_time_diff_us(startTime, get_absolute_time()) < 100000) // 超时100ms
+    {
+        uint8_t response = readRegister8(_i2caddr, MAX30105_DIETEMPCONFIG);
+        if ((response & 0x01) == 0)
+            break;   // 完成！
+        sleep_ms(1); // 避免过度占用I2C总线
+    }
+    // TODO 如何处理失败？使用什么类型的错误？
+    //? if(millis() - startTime >= 100) return(-999.0);
+
+    // 第二步：读取芯片温度寄存器（整数）
+    int8_t tempInt = readRegister8(_i2caddr, MAX30105_DIETEMPINT);
+    uint8_t tempFrac = readRegister8(_i2caddr, MAX30105_DIETEMPFRAC);
+
+    // 第三步：计算温度（数据手册第23页）
+    return (float)tempInt + ((float)tempFrac * 0.0625);
+}
+
+// 返回芯片温度（华氏度）
+float MAX30105::readTemperatureF()
+{
+    float temp = readTemperature();
+
+    if (temp != -999.0)
+        temp = temp * 1.8 + 32.0;
+
+    return (temp);
+}
+
+// 设置接近中断阈值
+void MAX30105::setPROXINTTHRESH(uint8_t val)
+{
+    writeRegister8(_i2caddr, MAX30105_PROXINTTHRESH, val);
+}
+
+//
+// 设备ID和修订版本
+//
+uint8_t MAX30105::readPartID()
+{
+    return readRegister8(_i2caddr, MAX30105_PARTID);
+}
+
+void MAX30105::readRevisionID()
+{
+    revisionID = readRegister8(_i2caddr, MAX30105_REVISIONID);
+}
+
+uint8_t MAX30105::getRevisionID()
+{
+    return revisionID;
+}
+
+// 传感器设置
+// MAX30105有许多设置。默认选择：
+//  样本平均值 = 4
+//  模式 = 多LED
+//  ADC范围 = 16384（每LSB 62.5pA）
+//  采样率 = 50
+// 如果你刚开始使用MAX30105传感器，请使用默认设置
+void MAX30105::setup(uint8_t powerLevel, uint8_t sampleAverage, uint8_t ledMode, int sampleRate, int pulseWidth, int adcRange)
+{
+    softReset(); // 重置所有配置、阈值和数据寄存器到上电复位值
+
+    // FIFO配置
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // 如果你希望，芯片将平均多个相同类型的样本
+    if (sampleAverage == 1)
+        setFIFOAverage(MAX30105_SAMPLEAVG_1); // 每个FIFO记录不进行平均
+    else if (sampleAverage == 2)
+        setFIFOAverage(MAX30105_SAMPLEAVG_2);
+    else if (sampleAverage == 4)
+        setFIFOAverage(MAX30105_SAMPLEAVG_4);
+    else if (sampleAverage == 8)
+        setFIFOAverage(MAX30105_SAMPLEAVG_8);
+    else if (sampleAverage == 16)
+        setFIFOAverage(MAX30105_SAMPLEAVG_16);
+    else if (sampleAverage == 32)
+        setFIFOAverage(MAX30105_SAMPLEAVG_32);
+    else
+        setFIFOAverage(MAX30105_SAMPLEAVG_4);
+
+    // setFIFOAlmostFull(2); // 设置为30个样本以触发“几乎满”中断
+    enableFIFORollover(); // 允许FIFO环绕/滚动
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    // 模式配置
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    if (ledMode == 3)
+        setLEDMode(MAX30105_MODE_MULTILED); // 监视所有三个LED通道
+    else if (ledMode == 2)
+        setLEDMode(MAX30105_MODE_REDIRONLY); // 红色和红外
+    else
+        setLEDMode(MAX30105_MODE_REDONLY); // 仅红色
+    activeLEDs = ledMode;                  // 用于控制从FIFO缓冲区读取的字节数
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    // 粒子感应配置
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    if (adcRange < 4096)
+        setADCRange(MAX30105_ADCRANGE_2048); // 每LSB 7.81pA
+    else if (adcRange < 8192)
+        setADCRange(MAX30105_ADCRANGE_4096); // 每LSB 15.63pA
+    else if (adcRange < 16384)
+        setADCRange(MAX30105_ADCRANGE_8192); // 每LSB 31.25pA
+    else if (adcRange == 16384)
+        setADCRange(MAX30105_ADCRANGE_16384); // 每LSB 62.5pA
+    else
+        setADCRange(MAX30105_ADCRANGE_2048);
+
+    if (sampleRate < 100)
+        setSampleRate(MAX30105_SAMPLERATE_50); // 每秒采样50次
+    else if (sampleRate < 200)
+        setSampleRate(MAX30105_SAMPLERATE_100);
+    else if (sampleRate < 400)
+        setSampleRate(MAX30105_SAMPLERATE_200);
+    else if (sampleRate < 800)
+        setSampleRate(MAX30105_SAMPLERATE_400);
+    else if (sampleRate < 1000)
+        setSampleRate(MAX30105_SAMPLERATE_800);
+    else if (sampleRate < 1600)
+        setSampleRate(MAX30105_SAMPLERATE_1000);
+    else if (sampleRate < 3200)
+        setSampleRate(MAX30105_SAMPLERATE_1600);
+    else if (sampleRate == 3200)
+        setSampleRate(MAX30105_SAMPLERATE_3200);
+    else
+        setSampleRate(MAX30105_SAMPLERATE_50);
+
+    // 脉冲宽度越长，检测范围越长
+    // 在69us和0.4mA时约2英寸
+    // 在411us和0.4mA时约6英寸
+    if (pulseWidth < 118)
+        setPulseWidth(MAX30105_PULSEWIDTH_69); // 第26页，获得15位分辨率
+    else if (pulseWidth < 215)
+        setPulseWidth(MAX30105_PULSEWIDTH_118); // 16位分辨率
+    else if (pulseWidth < 411)
+        setPulseWidth(MAX30105_PULSEWIDTH_215); // 17位分辨率
+    else if (pulseWidth == 411)
+        setPulseWidth(MAX30105_PULSEWIDTH_411); // 18位分辨率
+    else
+        setPulseWidth(MAX30105_PULSEWIDTH_69);
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    // LED脉冲幅度配置
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // 默认值为0x1F，获得6.4mA
+    // powerLevel = 0x02, 0.4mA - 检测范围约4英寸
+    // powerLevel = 0x1F, 6.4mA - 检测范围约8英寸
+    // powerLevel = 0x7F, 25.4mA - 检测范围约8英寸
+    // powerLevel = 0xFF, 50.0mA - 检测范围约12英寸
+
+    setPulseAmplitudeRed(powerLevel);
+    setPulseAmplitudeIR(powerLevel);
+    setPulseAmplitudeGreen(powerLevel);
+    setPulseAmplitudeProximity(powerLevel);
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    // 多LED模式配置，启用三个LED的读取
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    enableSlot(1, SLOT_RED_LED);
+    if (ledMode > 1)
+        enableSlot(2, SLOT_IR_LED);
+    if (ledMode > 2)
+        enableSlot(3, SLOT_GREEN_LED);
+    // enableSlot(1, SLOT_RED_PILOT);
+    // enableSlot(2, SLOT_IR_PILOT);
+    // enableSlot(3, SLOT_GREEN_PILOT);
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    clearFIFO(); // 在开始检查传感器之前重置FIFO
+}
+
+//
+// 数据采集
+//
+
+// 告诉调用者有多少样本可用
+uint8_t MAX30105::available(void)
+{
+    int8_t numberOfSamples = sense.head - sense.tail;
+    if (numberOfSamples < 0)
+        numberOfSamples += STORAGE_SIZE;
+
+    return (numberOfSamples);
+}
+
+// 报告最新的红色值
 uint32_t MAX30105::getRed(void)
 {
-    // 检查新数据
+    // 检查传感器是否有新的数据，等待250ms
     if (safeCheck(250))
-    {
-        return sense.red[sense.head];
-    }
+        return (sense.red[sense.head]);
     else
-    {
-        return 0;
-    }
+        return (0); // 传感器未找到新数据
 }
 
-// 获取红外光值
+// 报告最新的红外值
 uint32_t MAX30105::getIR(void)
 {
-    // 检查新数据
+    // 检查传感器是否有新的数据，等待250ms
     if (safeCheck(250))
-    {
-        return sense.IR[sense.head];
-    }
+        return (sense.IR[sense.head]);
     else
-    {
-        return 0;
-    }
+        return (0); // 传感器未找到新数据
 }
 
-// 获取绿光值
+// 报告最新的绿色值
 uint32_t MAX30105::getGreen(void)
 {
-    // 检查新数据
+    // 检查传感器是否有新的数据，等待250ms
     if (safeCheck(250))
-    {
-        return sense.green[sense.head];
-    }
+        return (sense.green[sense.head]);
     else
-    {
-        return 0;
-    }
+        return (0); // 传感器未找到新数据
 }
 
-// 安全检查新数据
-bool MAX30105::safeCheck(uint8_t maxTimeToCheck)
+// 报告FIFO中的下一个红色值
+uint32_t MAX30105::getFIFORed(void)
 {
-    uint64_t startTime = to_ms_since_boot(get_absolute_time());
-
-    while (to_ms_since_boot(get_absolute_time()) - startTime < maxTimeToCheck)
-    {
-        if (check())
-        {
-            return true;
-        }
-        sleep_ms(1);
-    }
-    return false;
+    return (sense.red[sense.tail]);
 }
 
-// 检查新数据
+// 报告FIFO中的下一个红外值
+uint32_t MAX30105::getFIFOIR(void)
+{
+    return (sense.IR[sense.tail]);
+}
+
+// 报告FIFO中的下一个绿色值
+uint32_t MAX30105::getFIFOGreen(void)
+{
+    return (sense.green[sense.tail]);
+}
+
+// 前进尾部指针
+void MAX30105::nextSample(void)
+{
+    if (available()) // 仅在有新数据时前进尾部指针
+    {
+        sense.tail++;
+        sense.tail %= STORAGE_SIZE; // 环绕条件
+    }
+}
+
+// 轮询传感器以获取新数据
+// 定期调用
+// 如果有新数据可用，它会更新主结构中的头部和尾部
+// 返回获取的新样本数
 uint16_t MAX30105::check(void)
 {
     uint8_t readPointer = getReadPointer();
@@ -332,91 +537,139 @@ uint16_t MAX30105::check(void)
 
     int numberOfSamples = 0;
 
+    // 检查是否有新数据
     if (readPointer != writePointer)
     {
+        // 计算需要从传感器获取的读数数目
         numberOfSamples = writePointer - readPointer;
         if (numberOfSamples < 0)
         {
-            numberOfSamples += 32; // 环绕条件
+            numberOfSamples += 32; // 环绕情况
         }
 
-        // 读取 FIFO 数据
-        // 根据 activeLEDs 和 numberOfSamples 计算需要读取的字节数
-        int bytesToRead = numberOfSamples * activeLEDs * 3;
+        // 根据需要读取的样本数量计算字节数
+        int bytesLeftToRead = numberOfSamples * activeLEDs * 3;
+        uint8_t fifo_data_reg = MAX30105_FIFODATA;
 
-        uint8_t fifoData[bytesToRead];
-
-        // 读取 FIFO 数据，假设 FIFO 数据寄存器地址为 0x07
-        uint8_t reg = 0x07;
-        int ret = i2c_write_blocking(_i2c, _i2caddr, &reg, 1, true);
-        if (ret != 1)
+        while (bytesLeftToRead > 0)
         {
-            return 0;
-        }
-
-        ret = i2c_read_blocking(_i2c, _i2caddr, fifoData, bytesToRead, false);
-        if (ret != bytesToRead)
-        {
-            return 0;
-        }
-
-        // 解析 FIFO 数据
-        for (int i = 0; i < numberOfSamples; i++)
-        {
-            sense.head++;
-            sense.head %= STORAGE_SIZE;
-
-            uint32_t red = 0;
-            uint32_t ir = 0;
-            uint32_t green = 0;
-
-            int index = i * activeLEDs * 3;
-
-            // 读取红光数据
-            red = ((uint32_t)fifoData[index] << 16) | ((uint32_t)fifoData[index + 1] << 8) | fifoData[index + 2];
-            red &= 0x03FFFF; // 18 位有效数据
-
-            sense.red[sense.head] = red;
-
-            if (activeLEDs > 1)
+            int toGet = bytesLeftToRead;
+            if (toGet > I2C_BUFFER_LENGTH)
             {
-                // 读取红外光数据
-                index += 3;
-                ir = ((uint32_t)fifoData[index] << 16) | ((uint32_t)fifoData[index + 1] << 8) | fifoData[index + 2];
-                ir &= 0x03FFFF;
-
-                sense.IR[sense.head] = ir;
+                toGet = I2C_BUFFER_LENGTH - (I2C_BUFFER_LENGTH % (activeLEDs * 3)); // 调整为样本的整数倍
             }
 
-            if (activeLEDs > 2)
-            {
-                // 读取绿光数据
-                index += 3;
-                green = ((uint32_t)fifoData[index] << 16) | ((uint32_t)fifoData[index + 1] << 8) | fifoData[index + 2];
-                green &= 0x03FFFF;
+            bytesLeftToRead -= toGet;
 
-                sense.green[sense.head] = green;
+            // 发送 FIFO 数据寄存器地址
+            int result = i2c_write_blocking(_i2cPort, MAX30105_ADDRESS, &fifo_data_reg, 1, true);
+            if (result < 0)
+            {
+                DEBUG_PRINT("I2C write error: %d\n", result);
+                return 0;
+            }
+
+            // 读取数据到缓冲区
+            uint8_t data[toGet];
+            result = i2c_read_blocking(_i2cPort, MAX30105_ADDRESS, data, toGet, false);
+            if (result < 0)
+            {
+                DEBUG_PRINT("I2C read error: %d\n", result);
+                return 0;
+            }
+
+            int index = 0;
+            while (toGet > 0)
+            {
+                sense.head++;               // 更新存储结构的头部指针
+                sense.head %= STORAGE_SIZE; // 环绕条件
+
+                uint32_t tempLong = 0;
+
+                // 读取红光数据（3字节）
+                tempLong = ((uint32_t)data[index] << 16) | ((uint32_t)data[index + 1] << 8) | data[index + 2];
+                tempLong &= 0x3FFFF; // 保留 18 位数据
+                sense.red[sense.head] = tempLong;
+                index += 3;
+                toGet -= 3;
+
+                if (activeLEDs > 1)
+                {
+                    // 读取红外数据（3字节）
+                    tempLong = ((uint32_t)data[index] << 16) | ((uint32_t)data[index + 1] << 8) | data[index + 2];
+                    tempLong &= 0x3FFFF;
+                    sense.IR[sense.head] = tempLong;
+                    index += 3;
+                    toGet -= 3;
+                }
+
+                if (activeLEDs > 2)
+                {
+                    // 读取绿光数据（3字节）
+                    tempLong = ((uint32_t)data[index] << 16) | ((uint32_t)data[index + 1] << 8) | data[index + 2];
+                    tempLong &= 0x3FFFF;
+                    sense.green[sense.head] = tempLong;
+                    index += 3;
+                    toGet -= 3;
+                }
             }
         }
-
-        return numberOfSamples;
     }
 
-    return 0;
+    return numberOfSamples; // 返回新数据的样本数量
 }
 
-// 获取 FIFO 读指针
-uint8_t MAX30105::getReadPointer(void)
+// 检查新数据，但在一定时间后放弃
+// 如果找到新数据，则返回true
+// 如果未找到新数据，则返回false
+bool MAX30105::safeCheck(uint8_t maxTimeToCheck)
 {
-    // 假设 FIFO 读指针寄存器地址为 0x06
-    return readRegister8(0x06);
+    absolute_time_t markTime = get_absolute_time();
+
+    while (1)
+    {
+        // 将 maxTimeToCheck 从毫秒转换为微秒进行比较
+        if (absolute_time_diff_us(markTime, get_absolute_time()) > maxTimeToCheck * 1000)
+        {
+            return (false);
+        }
+
+        if (check() == true) // 找到新数据
+        {
+            return (true);
+        }
+
+        sleep_ms(1); // 暂停 1 毫秒
+    }
 }
 
-// 获取 FIFO 写指针
-uint8_t MAX30105::getWritePointer(void)
+// 给定一个寄存器，读取它，掩码它，然后设置该值
+void MAX30105::bitMask(uint8_t reg, uint8_t mask, uint8_t thing)
 {
-    // 假设 FIFO 写指针寄存器地址为 0x04
-    return readRegister8(0x04);
+    // 获取当前寄存器内容
+    uint8_t originalContents = readRegister8(_i2caddr, reg);
+
+    // 清零我们感兴趣的寄存器部分
+    originalContents = originalContents & mask;
+
+    // 更改内容
+    writeRegister8(_i2caddr, reg, originalContents | thing);
 }
 
-// 其他必要的函数实现...
+// writeRegister8 函数
+void MAX30105::writeRegister8(uint8_t address, uint8_t reg, uint8_t value)
+{
+    uint8_t buffer[2] = {reg, value};
+    i2c_write_blocking(_i2cPort, address, buffer, 2, false);
+}
+
+// readRegister8 函数
+uint8_t MAX30105::readRegister8(uint8_t address, uint8_t reg)
+{
+    uint8_t value = 0;
+    // 发送寄存器地址
+    i2c_write_blocking(_i2cPort, address, &reg, 1, true);
+    // 读取数据
+    i2c_read_blocking(_i2cPort, address, &value, 1, false);
+    return value;
+}

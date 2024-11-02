@@ -29,28 +29,22 @@ unsigned int Mp3::sendCommandWithUnsignedIntResponse(uint8_t command)
     memset(buffer, 0, sizeof(buffer));
     sendCommand(command, 0, 0, buffer, sizeof(buffer));
 
-#if MP3_DEBUG
-    printf("Received buffer: ");
+    DEBUG_PRINT("Received buffer: ");
     for (int i = 0; i < 6; i++)
     {
-        printf("%02X ", buffer[i]);
+        DEBUG_PRINT("%02X ", buffer[i]);
     }
-    printf("\n");
-#endif
+    DEBUG_PRINT("\n");
 
     if ((uint8_t)buffer[0] == 0xAA && (uint8_t)buffer[2] == command)
     {
         unsigned int value = ((uint8_t)buffer[3] << 8) | (uint8_t)buffer[4];
-#if MP3_DEBUG
-        printf("Received value: %u\n", value);
-#endif
+        DEBUG_PRINT("Received value: %u\n", value);
         return value;
     }
     else
     {
-#if MP3_DEBUG
-        printf("Invalid response format\n");
-#endif
+        DEBUG_PRINT("Invalid response format\n");
         return 0;
     }
 }
@@ -77,14 +71,12 @@ void Mp3::sendCommand(uint8_t command, uint8_t arg1, uint8_t arg2, char *respons
         args = 2;
     }
 
-#if MP3_DEBUG
-    printf("\nSending command: 7E %02X %02X", 2 + args, command);
+    DEBUG_PRINT("\nSending command: 7E %02X %02X", 2 + args, command);
     if (args >= 1)
-        printf(" %02X", arg1);
+        DEBUG_PRINT(" %02X", arg1);
     if (args >= 2)
-        printf(" %02X", arg2);
-    printf(" EF\n");
-#endif
+        DEBUG_PRINT(" %02X", arg2);
+    DEBUG_PRINT(" EF\n");
 
     uint8_t cmdBuffer[6];
     size_t cmdLength = 0;
@@ -107,9 +99,8 @@ void Mp3::sendCommand(uint8_t command, uint8_t arg1, uint8_t arg2, char *respons
 
             waitUntilAvailable(1000);
 
-        #if MP3_DEBUG
-            printf("Received response: ");
-        #endif
+
+            DEBUG_PRINT("Received response: ");
 
             unsigned int i = 0;
             uint8_t byte = 0;
@@ -117,9 +108,7 @@ void Mp3::sendCommand(uint8_t command, uint8_t arg1, uint8_t arg2, char *respons
             {
                 byte = uart_getc(MP3_UART_ID);
 
-        #if MP3_DEBUG
-                printf("%02X ", byte);
-        #endif
+                DEBUG_PRINT("%02X ", byte);
 
                 if (responseBuffer && (i < bufferLength - 1))
                 {
@@ -127,9 +116,7 @@ void Mp3::sendCommand(uint8_t command, uint8_t arg1, uint8_t arg2, char *respons
                 }
             }
 
-        #if MP3_DEBUG
-            printf("\n");
-        #endif
+            DEBUG_PRINT("\n");
 
         */
 }
@@ -163,14 +150,10 @@ void Mp3::init()
 
     setVolume(30);
     uint8_t volume = getVolume();
-#if MP3_DEBUG
-    printf("Volume: %u\n", volume);
-#endif
+    DEBUG_PRINT("Volume: %u\n", volume);
     setLoopMode(4); // 单曲播放
     count = countFiles();
-#if MP3_DEBUG
-    printf("MP3 file count: %u\n", count);
-#endif
+    DEBUG_PRINT("MP3 file count: %u\n", count);
 }
 
 void Mp3::play()

@@ -6,6 +6,7 @@
 #include "hardware/uart.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "debug.h"
 
 // 定义 UART 实例和引脚
 #define MP3_UART_ID uart1
@@ -33,8 +34,6 @@
 #define MP3_STATUS_FR 4
 
 #define MP3_STATUS_CHECKS_IN_AGREEMENT 4
-
-#define MP3_DEBUG 1
 
 class Mp3
 {

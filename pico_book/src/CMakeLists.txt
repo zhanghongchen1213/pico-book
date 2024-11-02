@@ -6,6 +6,8 @@ add_executable(${TARGET_NAME}
     main.cpp
     Mp3.cpp
     max30102.cpp
+    heartRate.cpp
+    data_global.c
     )
 
 # 包含头文件目录（如果需要）
