@@ -42,6 +42,7 @@ void gpio_interrupt_handler(uint gpio, uint32_t events)
         }
         else if (events & GPIO_IRQ_EDGE_FALL)
         {
+            xEventGroupSetBits(xEventGroup, EVENT_TOUCHA_SWITCH);
             DEBUG_PRINT("TouchA falling edge detected\n");
         }
     }
@@ -52,6 +53,7 @@ void gpio_interrupt_handler(uint gpio, uint32_t events)
         // xEventGroupSetBits(xEventGroup, EVENT_TOUCHB_SWITCH);
         if (events & GPIO_IRQ_EDGE_FALL)
         {
+            xEventGroupSetBits(xEventGroup, EVENT_TOUCHB_SWITCH);
             DEBUG_PRINT("TouchB falling edge detected\n");
         }
         else if (events & GPIO_IRQ_EDGE_RISE)

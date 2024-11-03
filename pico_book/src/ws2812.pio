@@ -1,0 +1,26 @@
+.program my_ws2812
+.wrap_target
+    pull                ; 从 TX 取 32bit 到 OSR
+    out null, 8         ; 抛掉 MSB 8bit
+send_bit:
+    out x, 1            ; 将 OSR 的 LSB 输出到 x
+
+    ; 若要发送 0，则拉高 50 周期；要发送 1，则拉高 100 周期
+    set pins, 1 [20]    ; 拉高，然后等待 20 周期
+    nop         [27]    ; 等待 28 周期
+
+    jmp !x skip_1       ; 若 x=0，则不再等待
+    nop         [20]
+    nop         [28]    ; 等待 50 周期
+
+    ; 若要发送 0，则拉低 106 周期；要发送 1，则拉低 56 周期
+skip_1:
+    set pins, 0 [26]    ; 拉低，然后等待 26 周期
+    nop         [25]    ; 等待 26 周期
+
+    jmp x-- skip_2      ; 若 x=1，则不再等待
+    nop         [20]
+    nop         [28]    ; 等待 50 周期
+skip_2:
+    jmp !osre send_bit
+.wrap

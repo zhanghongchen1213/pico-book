@@ -32,4 +32,6 @@
 #define PICO_DEFAULT_LED_PIN 25
 #endif
 
+#define REG_LED_SUM 70
+
 #endif // __DATA_GLOBAL_H__

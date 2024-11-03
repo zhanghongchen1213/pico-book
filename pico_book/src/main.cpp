@@ -6,7 +6,10 @@
 #include "data_global.h"
 #include "ssd1306_i2c.h"
 #include "irq.h"
+#include "ws2812.h"
+#include "led.h"
 
+extern uint32_t data[REG_LED_SUM];
 // 全局变量
 const uint8_t RATE_SIZE = 4; // 定义心率数组大小，用于计算心率的移动平均值
 uint8_t rates[RATE_SIZE];    // 存储多个心率的数组，用于平滑心率波动
@@ -16,9 +19,6 @@ absolute_time_t lastBeat;    // 更新 lastBeat 的类型
 float beatsPerMinute;   // 实时心率（单位：每分钟）
 int beatAvg = 0;        // 心率的平均值
 bool heartBeat = false; // 心跳检测标志
-
-extern int beatAvg;
-extern bool heartBeat;
 
 // 事件组句柄
 extern EventGroupHandle_t xEventGroup;
@@ -146,11 +146,25 @@ void Task_WS2812BControl(void *pvParameters)
         if (uxBits & EVENT_TOUCHA_SWITCH)
         {
             // 处理触摸开关触发的氛围灯变化
+            for (uint i = 0; i < REG_LED_SUM; i++)
+            {
+                data[i] = 0xFF0000; // 红色
+            }
+            ws2812_send_data();
+            led_group.led_on();
+            led_group.led_alone_on();
         }
 
         if (uxBits & EVENT_TOUCHB_SWITCH)
         {
-            // 处理心跳检测触发的氛围灯变化
+            //
+            for (uint i = 0; i < REG_LED_SUM; i++)
+            {
+                data[i] = 0x00FF00; // 绿色
+            }
+            ws2812_send_data();
+            led_group.led_off();
+            led_group.led_alone_off();
         }
 
         if (uxBits & EVENT_HEARTBEAT_RISE)
@@ -322,6 +336,18 @@ void hardware_init()
 
     // DEBUG_PRINT("SSD1306 OLED init begin....\r\n");
     // ssd1306_begin();
+
+    init_pio();
+
+    // 初始化 data 数组，设置颜色数据
+    for (uint i = 0; i < REG_LED_SUM; i++)
+    {
+        data[i] = 0x010101 * i; // 颜色数据，可以根据需要设置不同颜色
+    }
+
+    ws2812_send_data();
+
+    led_group.led_init();
 }
 
 int main(void)
