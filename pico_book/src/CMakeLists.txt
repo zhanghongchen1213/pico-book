@@ -8,6 +8,8 @@ add_executable(${TARGET_NAME}
     max30102.cpp
     heartRate.cpp
     data_global.c
+    irq.c
+    ssd1306_i2c.c
     )
 
 # 包含头文件目录（如果需要）

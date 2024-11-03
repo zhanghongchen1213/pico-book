@@ -32,8 +32,4 @@
 #define PICO_DEFAULT_LED_PIN 25
 #endif
 
-#define TOUCHA_PIN 16
-#define TOUCHB_PIN 17
-#define HEARTBEAT_INT_PIN 6
-
 #endif // __DATA_GLOBAL_H__

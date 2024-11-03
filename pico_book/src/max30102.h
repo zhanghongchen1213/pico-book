@@ -152,7 +152,7 @@ class MAX30105
 public:
     MAX30105(void);
 
-    bool begin(i2c_inst_t *i2c, uint8_t sda_pin = PICO_DEFAULT_I2C_SDA_PIN, uint8_t scl_pin = PICO_DEFAULT_I2C_SCL_PIN, uint32_t i2cSpeed = I2C_SPEED_FAST, uint8_t i2caddr = MAX30105_ADDRESS);
+    bool begin(i2c_inst_t *i2c = i2c0, uint8_t sda_pin = PICO_DEFAULT_I2C_SDA_PIN, uint8_t scl_pin = PICO_DEFAULT_I2C_SCL_PIN, uint32_t i2cSpeed = I2C_SPEED_FAST, uint8_t i2caddr = MAX30105_ADDRESS);
 
     uint32_t getRed(void);                  // 返回即时红色值
     uint32_t getIR(void);                   // 返回即时红外值

@@ -1,5 +1,6 @@
-pico_book/src/CMakeFiles/main.dir/main.cpp.obj: \
- /home/pico-book/pico_book/src/main.cpp /usr/include/newlib/stdio.h \
+pico_book/src/CMakeFiles/main.dir/ssd1306_i2c.c.obj: \
+ /home/pico-book/pico_book/src/ssd1306_i2c.c \
+ /home/pico-book/pico_book/src/ssd1306_i2c.h /usr/include/newlib/stdio.h \
  /usr/include/newlib/_ansi.h /usr/include/newlib/newlib.h \
  /usr/include/newlib/_newlib_version.h /usr/include/newlib/sys/config.h \
  /usr/include/newlib/machine/ieeefp.h /usr/include/newlib/sys/features.h \
@@ -10,16 +11,15 @@ pico_book/src/CMakeFiles/main.dir/main.cpp.obj: \
  /usr/include/newlib/sys/reent.h /usr/include/newlib/_ansi.h \
  /usr/include/newlib/sys/_types.h /usr/include/newlib/machine/_types.h \
  /usr/include/newlib/sys/lock.h /usr/include/newlib/sys/stdio.h \
+ /usr/include/newlib/string.h /usr/include/newlib/sys/_locale.h \
+ /usr/include/newlib/strings.h /usr/include/newlib/sys/string.h \
+ /usr/include/newlib/stdlib.h /usr/include/newlib/machine/stdlib.h \
+ /usr/include/newlib/alloca.h /usr/include/newlib/ctype.h \
  /usr/local/picosdk/src/common/pico_stdlib_headers/include/pico/stdlib.h \
  /usr/local/picosdk/src/common/pico_base_headers/include/pico.h \
  /usr/local/picosdk/src/common/pico_base_headers/include/pico/types.h \
  /usr/local/picosdk/src/common/pico_base_headers/include/pico/assert.h \
  /usr/lib/gcc/arm-none-eabi/13.2.1/include/stdbool.h \
- /usr/include/newlib/c++/13.2.1/cassert \
- /usr/include/newlib/c++/13.2.1/arm-none-eabi/thumb/v6-m/nofp/bits/c++config.h \
- /usr/include/newlib/c++/13.2.1/arm-none-eabi/thumb/v6-m/nofp/bits/os_defines.h \
- /usr/include/newlib/c++/13.2.1/arm-none-eabi/thumb/v6-m/nofp/bits/cpu_defines.h \
- /usr/include/newlib/c++/13.2.1/pstl/pstl_config.h \
  /usr/include/newlib/assert.h \
  /usr/lib/gcc/arm-none-eabi/13.2.1/include/stdint.h \
  /home/pico-book/build/generated/pico_base/pico/version.h \
@@ -68,45 +68,13 @@ pico_book/src/CMakeFiles/main.dir/main.cpp.obj: \
  /usr/local/picosdk/src/rp2040/hardware_structs/include/hardware/structs/resets.h \
  /usr/local/picosdk/src/rp2040/hardware_regs/include/hardware/regs/resets.h \
  /usr/local/picosdk/src/rp2_common/pico_stdio_uart/include/pico/stdio_uart.h \
- /home/pico-book/pico_book/src/Mp3.h \
- /usr/local/freertos/include/FreeRTOS.h \
- /usr/local/freertos/include/projdefs.h \
- /usr/local/freertos/include/portable.h \
- /usr/local/freertos/include/deprecated_definitions.h \
- /usr/local/freertos/portable/ThirdParty/GCC/RP2040/include/portmacro.h \
- /usr/local/picosdk/src/rp2_common/hardware_sync/include/hardware/sync.h \
- /usr/local/picosdk/src/rp2_common/hardware_sync_spin_lock/include/hardware/sync/spin_lock.h \
- /usr/local/freertos/include/mpu_wrappers.h \
- /usr/local/freertos/include/task.h /usr/local/freertos/include/list.h \
- /home/pico-book/pico_book/src/debug.h \
- /home/pico-book/pico_book/src/max30102.h \
- /usr/include/newlib/c++/13.2.1/cstdio \
- /usr/local/picosdk/src/rp2_common/hardware_i2c/include/hardware/i2c.h \
- /usr/local/picosdk/src/rp2040/hardware_structs/include/hardware/structs/i2c.h \
- /usr/local/picosdk/src/rp2040/hardware_regs/include/hardware/regs/i2c.h \
- /home/pico-book/pico_book/src/heartRate.h \
- /usr/include/newlib/c++/13.2.1/cstdint \
- /home/pico-book/pico_book/src/data_global.h \
- /usr/local/picosdk/src/rp2_common/pico_multicore/include/pico/multicore.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/sync.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/sem.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/lock_core.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/mutex.h \
- /usr/local/picosdk/src/common/pico_sync/include/pico/critical_section.h \
- /usr/local/freertos/include/event_groups.h \
- /usr/local/freertos/include/timers.h /usr/local/freertos/include/task.h \
- /usr/local/freertos/include/queue.h \
- /home/pico-book/pico_book/src/ssd1306_i2c.h /usr/include/newlib/string.h \
- /usr/include/newlib/sys/_locale.h /usr/include/newlib/strings.h \
- /usr/include/newlib/sys/string.h /usr/include/newlib/c++/13.2.1/stdlib.h \
- /usr/include/newlib/c++/13.2.1/cstdlib /usr/include/newlib/stdlib.h \
- /usr/include/newlib/machine/stdlib.h /usr/include/newlib/alloca.h \
- /usr/include/newlib/c++/13.2.1/bits/std_abs.h \
- /usr/include/newlib/ctype.h \
  /usr/local/picosdk/src/common/pico_binary_info/include/pico/binary_info.h \
  /usr/local/picosdk/src/common/pico_binary_info/include/pico/binary_info/defs.h \
  /usr/local/picosdk/src/common/pico_binary_info/include/pico/binary_info/structure.h \
  /usr/local/picosdk/src/common/pico_binary_info/include/pico/binary_info/code.h \
+ /usr/local/picosdk/src/rp2_common/hardware_i2c/include/hardware/i2c.h \
+ /usr/local/picosdk/src/rp2040/hardware_structs/include/hardware/structs/i2c.h \
+ /usr/local/picosdk/src/rp2040/hardware_regs/include/hardware/regs/i2c.h \
  /home/pico-book/pico_book/src/raspberry26x32.h \
  /home/pico-book/pico_book/src/ssd1306_font.h \
- /home/pico-book/pico_book/src/irq.h
+ /home/pico-book/pico_book/src/debug.h

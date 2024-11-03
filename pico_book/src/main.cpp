@@ -4,6 +4,8 @@
 #include "max30102.h"
 #include "debug.h"
 #include "data_global.h"
+#include "ssd1306_i2c.h"
+#include "irq.h"
 
 // 全局变量
 const uint8_t RATE_SIZE = 4; // 定义心率数组大小，用于计算心率的移动平均值
@@ -120,7 +122,7 @@ void Task_HeartbeatMonitor(void *pvParameters)
                 beatAvg /= RATE_SIZE;
             }
         }
-        DEBUG_PRINT("Heart rate: %d\n", beatAvg);
+        // DEBUG_PRINT("Heart rate: %d\n", beatAvg);
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
@@ -298,73 +300,28 @@ void vLaunch(void)
     vTaskStartScheduler();
 }
 
-void gpio_interrupt_handler(uint gpio, uint32_t events)
-{
-    // 根据触发的GPIO处理不同的任务
-    if (gpio == TOUCHA_PIN)
-    {
-        // 通知任务1
-        xTaskNotify(xTask_TouchSwitchMonitor_Handle, 0, eSetBits);
-        xEventGroupSetBits(xEventGroup, EVENT_TOUCHA_SWITCH);
-    }
-    else if (gpio == TOUCHB_PIN)
-    {
-        // 通知任务2
-        xTaskNotify(xTask_TouchSwitchMonitor_Handle, 0, eSetBits);
-        xEventGroupSetBits(xEventGroup, EVENT_TOUCHB_SWITCH);
-    }
-    // 处理第三个GPIO的上下沿变化
-    else if (gpio == HEARTBEAT_INT_PIN)
-    {
-        if (events & GPIO_IRQ_EDGE_RISE)
-        {
-            // xTaskNotify(xTask_HeartbeatMonitor_Handle, 0, eSetBits);
-            // xEventGroupSetBits(xEventGroup, EVENT_HEARTBEAT_RISE);
-            DEBUG_PRINT("Heartbeat rising edge detected\n");
-        }
-        else if (events & GPIO_IRQ_EDGE_FALL)
-        {
-            // xEventGroupSetBits(xEventGroup, EVENT_HEARTBEAT_DOWN);
-            DEBUG_PRINT("Heartbeat falling edge detected\n");
-        }
-    }
-}
-
 void hardware_init()
 {
     /*mp3硬件初始化*/
     mp3.init();
 
     /*中断配置*/
-    // 设置GPIO引脚为输入
-    gpio_init(TOUCHA_PIN);
-    gpio_set_dir(TOUCHB_PIN, GPIO_IN);
-    gpio_pull_up(TOUCHB_PIN);
-
-    gpio_init(TOUCHB_PIN);
-    gpio_set_dir(TOUCHB_PIN, GPIO_IN);
-    gpio_pull_up(TOUCHB_PIN);
-
-    gpio_init(HEARTBEAT_INT_PIN);
-    gpio_set_dir(HEARTBEAT_INT_PIN, GPIO_IN);
-
-    // 设置中断回调
-    gpio_set_irq_enabled_with_callback(TOUCHA_PIN, GPIO_IRQ_EDGE_RISE, true, gpio_interrupt_handler);
-    gpio_set_irq_enabled_with_callback(TOUCHB_PIN, GPIO_IRQ_EDGE_RISE, true, gpio_interrupt_handler);
-    gpio_set_irq_enabled_with_callback(HEARTBEAT_INT_PIN, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, gpio_interrupt_handler);
+    pico_irq_init();
 
     /*心跳检测硬件初始化*/
-    if (!particleSensor.begin(i2c0)) // 使用默认 I2C 端口，速率为 400kHz
+    if (!particleSensor.begin()) // 使用默认 I2C 端口，速率为 400kHz
     {
         DEBUG_PRINT("MAX30105 was not found. Please check wiring/power.");
         while (1)
             ; // 如果传感器初始化失败，程序停在此处
     }
-    DEBUG_PRINT("Place your index finger on the sensor with steady pressure.");
     particleSensor.setup();                    // 配置传感器为默认设置
     particleSensor.enableDATARDY();            // 开启数据准备中断
     particleSensor.setPulseAmplitudeRed(0x0A); // 设置红光的幅度
     particleSensor.setPulseAmplitudeGreen(0);  // Turn off Green LED
+
+    // DEBUG_PRINT("SSD1306 OLED init begin....\r\n");
+    // ssd1306_begin();
 }
 
 int main(void)
