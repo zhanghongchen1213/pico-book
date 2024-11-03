@@ -8,6 +8,7 @@
 #include "irq.h"
 #include "ws2812.h"
 #include "led.h"
+#include "lightR.h"
 
 extern uint32_t data[REG_LED_SUM];
 // 全局变量
@@ -260,6 +261,8 @@ void Task_Blink(void *pvParameters)
         // 切换 LED 状态
         led_state = !led_state;
         gpio_put(PICO_DEFAULT_LED_PIN, led_state);
+        uint16_t lightValue = adc.read();
+        DEBUG_PRINT("Light value: %d\n", lightValue);
         // 延时
         vTaskDelay(pdMS_TO_TICKS(LED_DELAY_MS));
     }
@@ -348,6 +351,8 @@ void hardware_init()
     ws2812_send_data();
 
     led_group.led_init();
+
+    adc.init();
 }
 
 int main(void)

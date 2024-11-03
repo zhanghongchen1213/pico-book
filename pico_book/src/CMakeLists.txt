@@ -12,6 +12,7 @@ add_executable(${TARGET_NAME}
     ssd1306_i2c.c
     ws2812.cpp
     led.cpp
+    lightR.cpp
     )
 
 # 为主目标生成 PIO 头文件
@@ -34,6 +35,7 @@ target_link_libraries(${TARGET_NAME} PRIVATE
     hardware_i2c          # I2C 硬件库
     hardware_pio          # PIO 硬件库
     hardware_dma           # DMA 硬件库
+    hardware_adc           # ADC 硬件库
     )
     
 # 添加额外的输出（如 UF2 文件）

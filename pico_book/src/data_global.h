@@ -25,7 +25,7 @@
 #define QUEUE_LENGTH 10
 
 // 定义 LED 闪烁间隔（毫秒）
-#define LED_DELAY_MS 500
+#define LED_DELAY_MS 200
 
 // 板载 LED 引脚
 #ifndef PICO_DEFAULT_LED_PIN
