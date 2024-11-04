@@ -4,7 +4,7 @@
 extern EventGroupHandle_t xEventGroup;
 
 // 任务句柄
-extern TaskHandle_t xTask_TouchSwitchMonitor_Handle;
+extern TaskHandle_t xTask_ADCMonitor_Handle;
 extern TaskHandle_t xTask_HeartbeatMonitor_Handle;
 extern TaskHandle_t xTask_WS2812BControl_Handle;
 extern TaskHandle_t xTask_VoiceBroadcastControl_Handle;
@@ -33,34 +33,34 @@ void gpio_interrupt_handler(uint gpio, uint32_t events)
     // 根据触发的GPIO处理不同的任务
     if (gpio == TOUCHA_PIN)
     {
-        // 通知任务1
-        // xTaskNotify(xTask_TouchSwitchMonitor_Handle, 0, eSetBits);
-        // xEventGroupSetBits(xEventGroup, EVENT_TOUCHA_SWITCH);
         if (events & GPIO_IRQ_EDGE_RISE)
         {
-            DEBUG_PRINT("TouchA rising edge detected\n");
+            led_group.led_alone_off();
+            xEventGroupSetBits(xEventGroup, EVENT_TOUCHA_SWITCH);
+            // DEBUG_PRINT("TouchA rising edge detected\n");
         }
         else if (events & GPIO_IRQ_EDGE_FALL)
         {
-            xEventGroupSetBits(xEventGroup, EVENT_TOUCHA_SWITCH);
-            DEBUG_PRINT("TouchA falling edge detected\n");
+            led_group.led_alone_on();
+            xEventGroupSetBits(xEventGroup, EVENT_TOUCHA_SWITCH_RISE);
+            // DEBUG_PRINT("TouchA falling edge detected\n");
         }
     }
     else if (gpio == TOUCHB_PIN)
     {
-        // 通知任务2
-        // xTaskNotify(xTask_TouchSwitchMonitor_Handle, 0, eSetBits);
-        // xEventGroupSetBits(xEventGroup, EVENT_TOUCHB_SWITCH);
         if (events & GPIO_IRQ_EDGE_FALL)
         {
             xEventGroupSetBits(xEventGroup, EVENT_TOUCHB_SWITCH);
-            DEBUG_PRINT("TouchB falling edge detected\n");
+            // DEBUG_PRINT("TouchB falling edge detected\n");
         }
         else if (events & GPIO_IRQ_EDGE_RISE)
         {
-            DEBUG_PRINT("TouchB rising edge detected\n");
+            xEventGroupSetBits(xEventGroup, EVENT_TOUCHB_SWITCH_RISE);
+            // DEBUG_PRINT("TouchB rising edge detected\n");
         }
     }
+}
+#if 0
     // 处理第三个GPIO的上下沿变化
     else if (gpio == HEARTBEAT_INT_PIN)
     {
@@ -76,4 +76,4 @@ void gpio_interrupt_handler(uint gpio, uint32_t events)
             DEBUG_PRINT("Heartbeat falling edge detected\n");
         }
     }
-}
+#endif

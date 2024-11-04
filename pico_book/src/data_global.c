@@ -7,11 +7,12 @@ EventGroupHandle_t xEventGroup;
 QueueHandle_t xHeartbeatQueue;
 
 // 任务句柄
-TaskHandle_t xTask_TouchSwitchMonitor_Handle;
+TaskHandle_t xTask_ADCMonitor_Handle;
 TaskHandle_t xTask_HeartbeatMonitor_Handle;
 TaskHandle_t xTask_WS2812BControl_Handle;
 TaskHandle_t xTask_VoiceBroadcastControl_Handle;
 TaskHandle_t xTask_OLEDDisplay_Handle;
 TaskHandle_t xTask_Blink_Handle;
 
+// 全局变量
 uint32_t data[REG_LED_SUM]; // WS2812B 数据缓冲区

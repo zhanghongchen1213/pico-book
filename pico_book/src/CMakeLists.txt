@@ -8,7 +8,7 @@ add_executable(${TARGET_NAME}
     max30102.cpp
     heartRate.cpp
     data_global.c
-    irq.c
+    irq.cpp
     ssd1306_i2c.c
     ws2812.cpp
     led.cpp

@@ -1283,3 +1283,16 @@ build/pico_book/src/CMakeFiles/main.dir/data_global.c.obj
 build/pico_book/src/CMakeFiles/main.dir/irq.c.obj
 build/pico_book/src/CMakeFiles/main.dir/main.cpp.obj
 build/pico_book/src/CMakeFiles/main.dir/main.cpp.obj.d
+build/pico_book/src/CMakeFiles/main.dir/compiler_depend.internal
+build/pico_book/src/CMakeFiles/main.dir/data_global.c.obj
+build/pico_book/src/CMakeFiles/main.dir/heartRate.cpp.obj
+build/pico_book/src/CMakeFiles/main.dir/irq.c.obj
+build/pico_book/src/CMakeFiles/main.dir/irq.c.obj.d
+build/pico_book/src/CMakeFiles/main.dir/irq.cpp.obj
+build/pico_book/src/CMakeFiles/main.dir/irq.cpp.obj.d
+build/pico_book/src/CMakeFiles/main.dir/lightR.cpp.obj
+build/pico_book/src/CMakeFiles/main.dir/lightR.cpp.obj.d
+build/pico_book/src/CMakeFiles/main.dir/main.cpp.obj
+build/pico_book/src/CMakeFiles/main.dir/main.cpp.obj.d
+build/pico_book/src/CMakeFiles/main.dir/usr/local/picosdk/src/rp2_common/hardware_adc/adc.c.obj
+build/pico_book/src/CMakeFiles/main.dir/usr/local/picosdk/src/rp2_common/hardware_adc/adc.c.obj.d

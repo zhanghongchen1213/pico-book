@@ -17,9 +17,13 @@
 
 // 定义事件组事件位
 #define EVENT_TOUCHA_SWITCH (1 << 0)
+#define EVENT_TOUCHA_SWITCH_RISE (1 << 6)
 #define EVENT_TOUCHB_SWITCH (1 << 1)
-#define EVENT_HEARTBEAT_RISE (1 << 2)
-#define EVENT_HEARTBEAT_DOWN (1 << 3)
+#define EVENT_TOUCHB_SWITCH_RISE (1 << 7)
+#define EVENT_HEARTBEAT (1 << 2)
+#define EVENT_HEARTCANCLE (1 << 3)
+#define EVENT_ADC_MONITOR (1 << 4)
+#define EVENT_EFFECT_CANCEL (1 << 5)
 
 // 定义队列长度
 #define QUEUE_LENGTH 10
@@ -32,6 +36,8 @@
 #define PICO_DEFAULT_LED_PIN 25
 #endif
 
-#define REG_LED_SUM 70
+#define REG_LED_SUM 60
 
-#endif // __DATA_GLOBAL_H__
+#define BRIGHTNESS 1500     // 开灯亮度阈值
+#define CLOSEBTIGHTNESS 100 // 关灯亮度阈值
+#endif                      // __DATA_GLOBAL_H__

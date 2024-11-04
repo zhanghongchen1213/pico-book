@@ -10,7 +10,6 @@
 #include "led.h"
 #include "lightR.h"
 
-extern uint32_t data[REG_LED_SUM];
 // 全局变量
 const uint8_t RATE_SIZE = 4; // 定义心率数组大小，用于计算心率的移动平均值
 uint8_t rates[RATE_SIZE];    // 存储多个心率的数组，用于平滑心率波动
@@ -21,110 +20,126 @@ float beatsPerMinute;   // 实时心率（单位：每分钟）
 int beatAvg = 0;        // 心率的平均值
 bool heartBeat = false; // 心跳检测标志
 
+/*外部变量*/
+extern uint32_t data[REG_LED_SUM];
 // 事件组句柄
 extern EventGroupHandle_t xEventGroup;
-
 // 数据队列句柄
 extern QueueHandle_t xHeartbeatQueue;
-
 // 任务句柄
-extern TaskHandle_t xTask_TouchSwitchMonitor_Handle;
+extern TaskHandle_t xTask_ADCMonitor_Handle;
 extern TaskHandle_t xTask_HeartbeatMonitor_Handle;
 extern TaskHandle_t xTask_WS2812BControl_Handle;
 extern TaskHandle_t xTask_VoiceBroadcastControl_Handle;
 extern TaskHandle_t xTask_OLEDDisplay_Handle;
 extern TaskHandle_t xTask_Blink_Handle;
 
-// 触摸开关监测任务
-void Task_TouchSwitchMonitor(void *pvParameters)
+// 光敏监测任务
+void Task_ADCMonitor(void *pvParameters)
 {
+    bool eventReported = false; // 标志位，用于标记事件是否已上报
     while (1)
     {
-        // 检测触摸开关状态
-        bool touchDetected = false; // 这里需要替换为实际的触摸检测逻辑
+        uint16_t lightValue = adc.read();
+        DEBUG_PRINT("Light value: %d\n", lightValue);
 
-        if (touchDetected)
+        if (lightValue >= BRIGHTNESS && !eventReported) // 达到亮度阈值且事件尚未触发
         {
-            // 控制5个IO口连接的LED灯
-            // 控制单IO口连接的LED灯带
-            // 上报MCU（如需要）
-
-            // 设置事件，通知其他任务
-            xEventGroupSetBits(xEventGroup, EVENT_TOUCHA_SWITCH);
+            // 打开最后一页，开启流水灯
+            led_group.led_on();
+            // 上报MCU更新RGB和语音事件
+            xEventGroupSetBits(xEventGroup, EVENT_ADC_MONITOR);
+            eventReported = true; // 标记事件已上报
+        }
+        else if (lightValue <= CLOSEBTIGHTNESS && eventReported) // 达到关闭阈值且事件已触发
+        {
+            // 关闭流水灯
+            led_group.led_off();
+            eventReported = false; // 重置标志位，允许重新触发事件
         }
 
         // 适当延时，避免任务占用过多CPU时间
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
 // 心跳检测任务
 void Task_HeartbeatMonitor(void *pvParameters)
 {
+    bool heart_detected = false;     // 标记心跳是否正在进行
+    bool finger_present = false;     // 标记手指是否在传感器上
+    bool heartbeat_reported = false; // 标记心跳事件是否已上报
+
     while (1)
     {
-        /*
-        // 阻塞自身等待任务通知
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        DEBUG_PRINT("HeartbeatMonitor task notified\n");
-        // 执行心跳检测逻辑
-        uint32_t irValue = particleSensor.getIR(); // 读取 IR 数据
-        if (checkForBeat(irValue))
-        {
-            absolute_time_t currentTime = get_absolute_time();               // 获取当前时间
-            int64_t delta_us = absolute_time_diff_us(lastBeat, currentTime); // 计算时间差
-            lastBeat = currentTime;
-
-            float delta = delta_us / 1000.0;        // 将微秒转换为毫秒
-            beatsPerMinute = 60 / (delta / 1000.0); // 将时间差换算为每分钟心率
-
-            if (beatsPerMinute < 255 && beatsPerMinute > 20)
-            {
-                rates[rateSpot++] = (uint8_t)beatsPerMinute;
-                rateSpot %= RATE_SIZE;
-
-                // 计算平均心率
-                beatAvg = 0;
-                for (uint8_t x = 0; x < RATE_SIZE; x++)
-                {
-                    beatAvg += rates[x];
-                }
-                beatAvg /= RATE_SIZE;
-
-                DEBUG_PRINT("Heartbeat detected! BPM: %d\n", beatAvg);
-            }
-        }*/
-
         long irValue = particleSensor.getIR(); // 获取红外 LED 的光强度值
-        // DEBUG_PRINT("IR Value: %ld\n", irValue);
+        // DEBUG_PRINT("IR value: %ld\n", irValue);
 
-        if (checkForBeat(irValue) == true) // 检测是否检测到心跳
+        if (irValue > 100000) // 检测手指是否放上
         {
-            DEBUG_PRINT("Heartbeat detected!\n");
-            // 检测到心跳！
-            absolute_time_t currentTime = get_absolute_time();               // 获取当前时间
-            int64_t delta_us = absolute_time_diff_us(lastBeat, currentTime); // 计算时间差，单位为微秒
-            lastBeat = currentTime;                                          // 更新最后心跳时间
+            if (!finger_present)
+            {
+                // 首次检测到手指放上
+                finger_present = true;
+                DEBUG_PRINT("Finger detected on sensor.\n");
+                heartbeat_reported = false; // 允许触发心跳事件
+            }
 
-            float delta = delta_us / 1000.0;        // 将微秒转换为毫秒
-            beatsPerMinute = 60 / (delta / 1000.0); // 将时间差换算为每分钟心率
-
-            if (beatsPerMinute < 255 && beatsPerMinute > 20)
-            {                                                // 心率在合理范围内
-                rates[rateSpot++] = (uint8_t)beatsPerMinute; // 将当前心率存储到数组中
-                rateSpot %= RATE_SIZE;                       // 将数组索引限制在 RATE_SIZE 范围内
-
-                // 计算心率的平均值
-                beatAvg = 0;
-                for (uint8_t x = 0; x < RATE_SIZE; x++)
+            // 始终检测心跳，不受 heart_detected 限制
+            if (checkForBeat(irValue))
+            {
+                if (!heart_detected)
                 {
-                    beatAvg += rates[x];
+                    heart_detected = true;
+
+                    // 仅触发一次心跳事件
+                    if (!heartbeat_reported)
+                    {
+                        DEBUG_PRINT("Heartbeat detected!\n");
+                        xEventGroupSetBits(xEventGroup, EVENT_HEARTBEAT); // 上报心跳事件
+                        heartbeat_reported = true;                        // 标记为已触发
+                    }
                 }
-                beatAvg /= RATE_SIZE;
+
+                // 计算心率
+                absolute_time_t currentTime = get_absolute_time();               // 获取当前时间
+                int64_t delta_us = absolute_time_diff_us(lastBeat, currentTime); // 计算时间差
+                lastBeat = currentTime;                                          // 更新最后心跳时间
+
+                float delta = delta_us / 1000.0;        // 将微秒转换为毫秒
+                beatsPerMinute = 60 / (delta / 1000.0); // 换算为每分钟心率
+
+                if (beatsPerMinute < 255 && beatsPerMinute > 20) // 心率在合理范围内
+                {
+                    rates[rateSpot++] = (uint8_t)beatsPerMinute;
+                    rateSpot %= RATE_SIZE;
+
+                    // 计算心率平均值
+                    beatAvg = 0;
+                    for (uint8_t x = 0; x < RATE_SIZE; x++)
+                    {
+                        beatAvg += rates[x];
+                    }
+                    beatAvg /= RATE_SIZE;
+                }
             }
         }
-        // DEBUG_PRINT("Heart rate: %d\n", beatAvg);
-        vTaskDelay(pdMS_TO_TICKS(10));
+        else if (finger_present && heart_detected) // 手指从传感器上移开
+        {
+            // 手指拿开，停止心跳监测
+            finger_present = false;
+            heart_detected = false;
+            beatAvg = 0;
+            DEBUG_PRINT("Finger removed, heart monitoring stopped.\n");
+            xEventGroupSetBits(xEventGroup, EVENT_HEARTCANCLE); // 上报心跳取消事件
+        }
+        DEBUG_PRINT("Heart rate: %d\n", beatAvg);
+        // 将心跳数据发送到队列中
+        if (beatAvg > 0)
+        {
+            xQueueSend(xHeartbeatQueue, &beatAvg, 0);
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -132,13 +147,15 @@ void Task_HeartbeatMonitor(void *pvParameters)
 void Task_WS2812BControl(void *pvParameters)
 {
     EventBits_t uxBits;
+    rgb.start_effect(convertToGRB(0xFF0000), rainbow_cycle_task); // 彩虹效果
 
     while (1)
     {
         // 等待事件组的事件
         uxBits = xEventGroupWaitBits(
             xEventGroup,
-            EVENT_TOUCHA_SWITCH | EVENT_TOUCHB_SWITCH | EVENT_HEARTBEAT_RISE | EVENT_HEARTBEAT_DOWN,
+            EVENT_TOUCHA_SWITCH | EVENT_TOUCHB_SWITCH | EVENT_HEARTBEAT | EVENT_ADC_MONITOR | EVENT_HEARTCANCLE |
+                EVENT_TOUCHA_SWITCH_RISE | EVENT_TOUCHB_SWITCH_RISE,
             pdTRUE,       // 清除已设置的事件位
             pdFALSE,      // 任意一个事件位被设置就返回
             portMAX_DELAY // 一直等待
@@ -147,35 +164,30 @@ void Task_WS2812BControl(void *pvParameters)
         if (uxBits & EVENT_TOUCHA_SWITCH)
         {
             // 处理触摸开关触发的氛围灯变化
-            for (uint i = 0; i < REG_LED_SUM; i++)
-            {
-                data[i] = 0xFF0000; // 红色
-            }
-            ws2812_send_data();
-            led_group.led_on();
-            led_group.led_alone_on();
+            rgb.start_effect(convertToGRB(0x6495ED), blink_task); // 绿色闪烁效果
         }
 
         if (uxBits & EVENT_TOUCHB_SWITCH)
         {
-            //
-            for (uint i = 0; i < REG_LED_SUM; i++)
-            {
-                data[i] = 0x00FF00; // 绿色
-            }
-            ws2812_send_data();
-            led_group.led_off();
-            led_group.led_alone_off();
+            // 处理触摸开关触发的氛围灯变化
+            rgb.start_effect(convertToGRB(0xFF0000), rainbow_cycle_task); // 彩虹效果
         }
 
-        if (uxBits & EVENT_HEARTBEAT_RISE)
+        if (uxBits & EVENT_HEARTBEAT)
         {
-            // 处理心跳检测上升沿触发的氛围灯变化
+            rgb.start_effect(convertToGRB(0xFF0000), heartbeat_task); // 红色心跳效果
         }
 
-        if (uxBits & EVENT_HEARTBEAT_DOWN)
+        if (uxBits & EVENT_HEARTCANCLE)
         {
-            // 处理心跳检测下降沿触发的氛围灯变化
+            // 切换到彩虹循环效果
+            rgb.start_effect(convertToGRB(0xFF69B4), breathing_light_task); // 粉色呼吸灯效果
+        }
+
+        if (uxBits & EVENT_ADC_MONITOR)
+        {
+            // 切换到彩虹循环效果
+            rgb.start_effect(convertToGRB(0xFFA500), breathing_light_task); // 橙色呼吸灯效果
         }
 
         // 适当延时，避免任务占用过多CPU时间
@@ -186,44 +198,45 @@ void Task_WS2812BControl(void *pvParameters)
 // 语音播报模块控制任务
 void Task_VoiceBroadcastControl(void *pvParameters)
 {
+    EventBits_t uxBits;
 
+    // 开机后播放默认音乐
+    // 播放默认音乐的逻辑
     while (1)
     {
-        mp3.randomAll();
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
+        // 等待事件组的事件
+        uxBits = xEventGroupWaitBits(
+            xEventGroup,
+            EVENT_TOUCHA_SWITCH | EVENT_TOUCHB_SWITCH | EVENT_HEARTBEAT | EVENT_ADC_MONITOR | EVENT_HEARTCANCLE |
+                EVENT_TOUCHA_SWITCH_RISE | EVENT_TOUCHB_SWITCH_RISE,
+            pdTRUE,       // 清除已设置的事件位
+            pdFALSE,      // 任意一个事件位被设置就返回
+            portMAX_DELAY // 一直等待
+        );
 
-    /*
-        EventBits_t uxBits;
-
-        // 开机后播放默认音乐
-        // 播放默认音乐的逻辑
-
-        while (1)
+        if (uxBits & EVENT_TOUCHA_SWITCH)
         {
-            // 等待事件组的事件
-            uxBits = xEventGroupWaitBits(
-                xEventGroup,
-                EVENT_TOUCH_SWITCH | EVENT_HEARTBEAT,
-                pdTRUE,       // 清除已设置的事件位
-                pdFALSE,      // 任意一个事件位被设置就返回
-                portMAX_DELAY // 一直等待
-            );
-
-            if (uxBits & EVENT_TOUCH_SWITCH)
-            {
-                // 播放触摸开关触发的音频
-            }
-
-            if (uxBits & EVENT_HEARTBEAT)
-            {
-                // 播放心跳检测触发的音频
-            }
-
-            // 适当延时，避免任务占用过多CPU时间
-            vTaskDelay(pdMS_TO_TICKS(10));
+            // 播放触摸开关触发的音频
         }
-        */
+
+        if (uxBits & EVENT_TOUCHB_SWITCH)
+        {
+            // 播放触摸开关触发的音频
+        }
+
+        if (uxBits & EVENT_HEARTBEAT)
+        {
+            // 播放心跳检测触发的音频
+        }
+
+        if (uxBits & EVENT_ADC_MONITOR)
+        {
+            // 播放 ADC 监测触发的音频
+        }
+
+        // 适当延时，避免任务占用过多CPU时间
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
 
 // OLED 显示任务
@@ -261,8 +274,6 @@ void Task_Blink(void *pvParameters)
         // 切换 LED 状态
         led_state = !led_state;
         gpio_put(PICO_DEFAULT_LED_PIN, led_state);
-        uint16_t lightValue = adc.read();
-        DEBUG_PRINT("Light value: %d\n", lightValue);
         // 延时
         vTaskDelay(pdMS_TO_TICKS(LED_DELAY_MS));
     }
@@ -277,9 +288,9 @@ void vLaunch(void)
     xHeartbeatQueue = xQueueCreate(QUEUE_LENGTH, sizeof(int));
 
     // 创建触摸开关监测任务
-    xTaskCreate(Task_TouchSwitchMonitor, "TouchSwitchMonitor", STACK_SIZE, NULL, PRIORITY_HIGH, &xTask_TouchSwitchMonitor_Handle);
+    xTaskCreate(Task_ADCMonitor, "ADCMonitor", STACK_SIZE, NULL, PRIORITY_MEDIUM, &xTask_ADCMonitor_Handle);
 #if (configUSE_CORE_AFFINITY == 1)
-    vTaskCoreAffinitySet(xTask_TouchSwitchMonitor_Handle, (1 << 0)); // 绑定到核心0
+    vTaskCoreAffinitySet(xTask_ADCMonitor_Handle, (1 << 0)); // 绑定到核心0
 #endif
 
     // 创建心跳检测任务
@@ -340,15 +351,9 @@ void hardware_init()
     // DEBUG_PRINT("SSD1306 OLED init begin....\r\n");
     // ssd1306_begin();
 
-    init_pio();
+    rgb.init_pio();
 
-    // 初始化 data 数组，设置颜色数据
-    for (uint i = 0; i < REG_LED_SUM; i++)
-    {
-        data[i] = 0x010101 * i; // 颜色数据，可以根据需要设置不同颜色
-    }
-
-    ws2812_send_data();
+    // rgb.rainbow_cycle(20);
 
     led_group.led_init();
 
